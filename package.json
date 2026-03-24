@@ -1,0 +1,41 @@
+{
+  "name": "nano-claude-code",
+  "version": "1.0.0",
+  "description": "coding agent",
+  "main": "dist/index.js",
+  "bin": {
+    "nano-claude-code": "bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/similesHuang/nano-claude-code.git"
+  },
+  "keywords": [
+    "agent",
+    "cli"
+  ],
+  "author": "theron",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/similesHuang/nano-claude-code/issues"
+  },
+  "homepage": "https://github.com/similesHuang/nano-claude-code#readme",
+  "devDependencies": {
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.0.0",
+    "commander": "^12.0.0",
+    "inquirer": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
