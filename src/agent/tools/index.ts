@@ -1,0 +1,115 @@
+import { runBash } from "./bash";
+import { runRead, runWrite, runEdit } from "./file";
+
+/**
+ * 工具定义数组 - Anthropic API 格式
+ * 一眼看到所有可用工具
+ */
+export const TOOLS = [
+  {
+    name: "bash",
+    description: "Run a shell command. Use this to interact with the system, files, and execute programs.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        command: {
+          type: "string",
+          description: "The shell command to execute",
+        },
+      },
+      required: ["command"],
+    },
+  },
+  {
+    name: "read_file",
+    description: "Read the contents of a file from the filesystem.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: {
+          type: "string",
+          description: "The path to the file to read",
+        },
+        limit: {
+          type: "integer",
+          description: "Optional: Limit output to first N lines",
+        },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "write_file",
+    description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: {
+          type: "string",
+          description: "The path where to write the file",
+        },
+        content: {
+          type: "string",
+          description: "The content to write to the file",
+        },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "edit_file",
+    description: "Replace exact text in a file.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: {
+          type: "string",
+          description: "The path to the file to edit",
+        },
+        old_text: {
+          type: "string",
+          description: "The exact text to find and replace",
+        },
+        new_text: {
+          type: "string",
+          description: "The new text to replace with",
+        },
+      },
+      required: ["path", "old_text", "new_text"],
+    },
+  },
+];
+
+/**
+ * Dispatch Map - 工具名称到处理函数的映射
+ * 清晰展示所有工具的路由关系
+ */
+export const TOOL_HANDLERS: Record<
+  string,
+  (input: any) => Promise<string>
+> = {
+  bash: (input) => runBash(input.command),
+  read_file: (input) => runRead(input.path, input.limit),
+  write_file: (input) => runWrite(input.path, input.content),
+  edit_file: (input) => runEdit(input.path, input.old_text, input.new_text),
+};
+
+/**
+ * 执行工具调用
+ */
+export async function executeTool(
+  name: string,
+  input: any,
+): Promise<string> {
+  const handler = TOOL_HANDLERS[name];
+  
+  if (!handler) {
+    return `Error: Unknown tool '${name}'`;
+  }
+  
+  try {
+    return await handler(input);
+  } catch (error: any) {
+    return `Error: ${error.message}`;
+  }
+}

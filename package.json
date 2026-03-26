@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "agent": "tsx src/agent/example.ts",
+    "agent:oneshot": "tsx src/agent/example.ts",
     "prepublishOnly": "npm run build"
   },
   "repository": {
@@ -27,12 +29,15 @@
   "homepage": "https://github.com/similesHuang/nano-claude-code#readme",
   "devDependencies": {
     "@types/inquirer": "^9.0.9",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.37",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "chalk": "^5.0.0",
     "commander": "^12.0.0",
+    "dotenv": "^17.3.1",
     "inquirer": "^9.0.0"
   },
   "engines": {
