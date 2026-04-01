@@ -3,9 +3,9 @@ import type {
   AgentConfig,
   ToolExecutionResult,
   AgentHooks,
-} from "../types";
-import { TOOLS, executeTool } from "../tools";
-import { todoManager } from "../scheduler";
+} from "./types";
+import { TOOLS, executeTool } from "./tools";
+import { todoManager } from "./scheduler";
 
 /**
  * AgentLoop - 核心 AI 代理循环
