@@ -3,33 +3,13 @@ import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { AgentLoop } from './agent';
-import type { AgentConfig } from './agent/types';
+import { agentConfig } from './config';
 
 const program = new Command();
 
 // 创建 Agent 实例的工厂函数
 function createAgent(): AgentLoop {
-  const config: AgentConfig = {
-    model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    baseUrl: process.env.ANTHROPIC_BASE_URL,
-    systemPrompt: `You are a helpful coding assistant. You can use tools to interact with the file system and execute commands to help the user with their tasks.`,
-    maxTokens: 8000,
-    temperature: 0.7,
-    maxIterations: 50,
-    hooks: {
-      onBeforeCall: () => {
-        console.log(chalk.gray('🤔 思考中...'));
-      },
-      onToolCall: (toolName, input) => {
-        console.log(chalk.blue(`🔧 使用工具: ${toolName}`));
-      },
-      onError: (error) => {
-        console.error(chalk.red(`❌ 错误: ${error.message}`));
-      },
-    },
-  };
-  return new AgentLoop(config);
+  return new AgentLoop(agentConfig);
 }
 
 program

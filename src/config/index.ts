@@ -1,0 +1,1 @@
+export { agentConfig } from './agent';
