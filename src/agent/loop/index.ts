@@ -5,6 +5,7 @@ import type {
   AgentHooks,
 } from "../types";
 import { TOOLS, executeTool } from "../tools";
+import { todoManager } from "../scheduler";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -30,6 +31,8 @@ export class AgentLoop {
     hooks: AgentHooks;
   };
   private messages: Anthropic.MessageParam[] = [];
+  private roundsSinceTodoUpdate: number = 0;
+  private readonly NAG_THRESHOLD: number = 3;
 
   constructor(config: AgentConfig) {
     // 合并默认配置
@@ -119,7 +122,23 @@ export class AgentLoop {
       }
 
       // 执行工具调用
-      const toolResults = await this.executeTools(response.content);
+      const { results: toolResults, usedTodo } = await this.executeTools(response.content);
+
+      // 更新 nag reminder 计数器
+      if (usedTodo) {
+        this.roundsSinceTodoUpdate = 0;
+      } else {
+        this.roundsSinceTodoUpdate++;
+      }
+
+      // 如果超过阈值未更新 todo，插入提醒
+      if (this.roundsSinceTodoUpdate >= this.NAG_THRESHOLD) {
+        toolResults.unshift({
+          type: "text" as const,
+          text: "<reminder>Update your todos.</reminder>",
+        } as any);
+        this.roundsSinceTodoUpdate = 0; // 重置以避免重复提醒
+      }
 
       // 将工具结果添加到消息历史
       this.messages.push({
@@ -137,20 +156,27 @@ export class AgentLoop {
 
   /**
    * 执行所有工具调用
+   * @returns 工具执行结果和是否使用了 todo 工具
    */
   private async executeTools(
     content: Array<Anthropic.ContentBlock>,
-  ): Promise<ToolExecutionResult[]> {
+  ): Promise<{ results: ToolExecutionResult[]; usedTodo: boolean }> {
     const results: ToolExecutionResult[] = [];
+    let usedTodo = false;
 
     for (const block of content) {
       if (block.type === "tool_use") {
+        // 检查是否使用了 todo 工具
+        if (todoManager.isTodoTool(block.name)) {
+          usedTodo = true;
+        }
+
         // 钩子：工具调用前
         await this.config.hooks.onToolCall?.(block.name, block.input);
 
         // 执行工具 - 使用 dispatch map
         const output = await executeTool(block.name, block.input);
-        
+
         // 打印工具执行结果
         console.log(`> ${block.name}: ${output.slice(0, 200)}`);
 
@@ -166,7 +192,7 @@ export class AgentLoop {
       }
     }
 
-    return results;
+    return { results, usedTodo };
   }
 
   /**

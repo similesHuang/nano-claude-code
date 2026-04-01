@@ -1,5 +1,6 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
+import { todoManager } from "../scheduler";
 
 /**
  * 工具定义数组 - Anthropic API 格式
@@ -78,6 +79,33 @@ export const TOOLS = [
       required: ["path", "old_text", "new_text"],
     },
   },
+  {
+    name: "todo",
+    description: "Update task list. Track progress on multi-step tasks. Mark in_progress before starting, completed when done.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        items: {
+          type: "array",
+          description: "Array of todo items",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", description: "Unique identifier for the task" },
+              text: { type: "string", description: "Task description" },
+              status: {
+                type: "string",
+                enum: ["pending", "in_progress", "completed"],
+                description: "Task status: pending (not started), in_progress (currently working on), completed (done)",
+              },
+            },
+            required: ["id", "text", "status"],
+          },
+        },
+      },
+      required: ["items"],
+    },
+  },
 ];
 
 /**
@@ -92,6 +120,7 @@ export const TOOL_HANDLERS: Record<
   read_file: (input) => runRead(input.path, input.limit),
   write_file: (input) => runWrite(input.path, input.content),
   edit_file: (input) => runEdit(input.path, input.old_text, input.new_text),
+  todo: (input) => Promise.resolve(todoManager.update(input.items)),
 };
 
 /**
