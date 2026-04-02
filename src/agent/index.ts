@@ -121,30 +121,42 @@ export class AgentLoop {
         break;
       }
 
-      // 执行工具调用
-      const { results: toolResults, usedTodo } = await this.executeTools(response.content);
+      // 执行工具调用 - 必须确保为所有 tool_use 提供 tool_result
+      try {
+        const { results: toolResults, usedTodo } = await this.executeTools(response.content);
 
-      // 更新 nag reminder 计数器
-      if (usedTodo) {
-        this.roundsSinceTodoUpdate = 0;
-      } else {
-        this.roundsSinceTodoUpdate++;
+        // 更新 nag reminder 计数器
+        if (usedTodo) {
+          this.roundsSinceTodoUpdate = 0;
+        } else {
+          this.roundsSinceTodoUpdate++;
+        }
+
+        // 将工具结果添加到消息历史
+        this.messages.push({
+          role: "user",
+          content: toolResults,
+        });
+
+        // 如果超过阈值未更新 todo，在单独的 user 消息中插入提醒
+        // 不能和 tool_result 混在同一个消息中，会导致 API 错误
+        if (this.roundsSinceTodoUpdate >= this.NAG_THRESHOLD) {
+          this.messages.push({
+            role: "user",
+            content: "<reminder>Update your todos.</reminder>",
+          });
+          this.roundsSinceTodoUpdate = 0; // 重置以避免重复提醒
+        }
+      } catch (error) {
+        // 如果执行工具时出错，仍然要为所有 tool_use 提供 error 响应
+        // 否则会导致 messages 数组状态不一致
+        const errorResults = this.createErrorToolResults(response.content, error);
+        this.messages.push({
+          role: "user",
+          content: errorResults,
+        });
+        console.error("Error executing tools:", error);
       }
-
-      // 如果超过阈值未更新 todo，插入提醒
-      if (this.roundsSinceTodoUpdate >= this.NAG_THRESHOLD) {
-        toolResults.unshift({
-          type: "text" as const,
-          text: "<reminder>Update your todos.</reminder>",
-        } as any);
-        this.roundsSinceTodoUpdate = 0; // 重置以避免重复提醒
-      }
-
-      // 将工具结果添加到消息历史
-      this.messages.push({
-        role: "user",
-        content: toolResults,
-      });
     }
 
     if (iteration >= this.config.maxIterations) {
@@ -171,28 +183,67 @@ export class AgentLoop {
           usedTodo = true;
         }
 
-        // 钩子：工具调用前
-        await this.config.hooks.onToolCall?.(block.name, block.input);
+        try {
+          // 钩子：工具调用前
+          await this.config.hooks.onToolCall?.(block.name, block.input);
 
-        // 执行工具 - 使用 dispatch map
-        const output = await executeTool(block.name, block.input);
+          // 执行工具 - 使用 dispatch map
+          const output = await executeTool(block.name, block.input);
 
-        // 打印工具执行结果
-        console.log(`> ${block.name}: ${output.slice(0, 200)}`);
+          // 打印工具执行结果
+          console.log(`> ${block.name}: ${output.slice(0, 200)}`);
 
-        // 钩子：工具调用后
-        await this.config.hooks.onToolResult?.(block.name, output);
+          // 钩子：工具调用后
+          await this.config.hooks.onToolResult?.(block.name, output);
 
-        results.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: output,
-          is_error: output.startsWith("Error:"),
-        });
+          results.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: output,
+            is_error: output.startsWith("Error:"),
+          });
+        } catch (error) {
+          // 如果执行单个工具时出错，仍然要返回 tool_result
+          // 这样可以继续处理其他工具调用
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`Error executing tool ${block.name}:`, errorMessage);
+          
+          results.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: `Error executing tool: ${errorMessage}`,
+            is_error: true,
+          });
+        }
       }
     }
 
     return { results, usedTodo };
+  }
+
+  /**
+   * 为所有 tool_use 创建错误响应
+   * 确保即使执行失败，也能维护消息历史的一致性
+   */
+  private createErrorToolResults(
+    content: Array<Anthropic.ContentBlock>,
+    error: unknown,
+  ): ToolExecutionResult[] {
+    const results: ToolExecutionResult[] = [];
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    for (const block of content) {
+      if (block.type === "tool_use") {
+        results.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: `Error executing tool: ${errorMessage}`,
+          is_error: true,
+        });
+      }
+    }
+
+    return results;
   }
 
   /**
