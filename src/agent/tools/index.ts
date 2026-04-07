@@ -112,7 +112,7 @@ export const TOOLS = [
  * Dispatch Map - 工具名称到处理函数的映射
  * 清晰展示所有工具的路由关系
  */
-export const TOOL_HANDLERS: Record<
+const TOOL_HANDLERS: Record<
   string,
   (input: any) => Promise<string>
 > = {

@@ -37,9 +37,7 @@ export class AgentLoop {
   constructor(config: AgentConfig) {
     // 合并默认配置
     this.config = {
-      model: config.model,
-      apiKey: config.apiKey,
-      baseUrl: config.baseUrl,
+      ...config,
       systemPrompt: config.systemPrompt || this.getDefaultSystemPrompt(),
       maxTokens: config.maxTokens || 8000,
       temperature: config.temperature ?? 0.7,

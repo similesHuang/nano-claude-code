@@ -17,7 +17,6 @@ export const agentConfig: AgentConfig = {
   maxIterations: 50,
   hooks: {
     onBeforeCall: () => {
-      console.log(chalk.gray('🤔 思考中...'));
     },
     onToolCall: (toolName: string) => {
       console.log(chalk.blue(`🔧 使用工具: ${toolName}`));
