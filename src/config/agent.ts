@@ -10,7 +10,6 @@ export const agentConfig: AgentConfig = {
   model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
   apiKey: process.env.ANTHROPIC_API_KEY,
   baseUrl: process.env.ANTHROPIC_BASE_URL,
-  systemPrompt: `You are a helpful coding assistant. You can use tools to interact with the file system and execute commands to help the user with their tasks.`,
   maxTokens: 8000,
   temperature: 0.7,
   maxIterations: 50,

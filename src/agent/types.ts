@@ -7,7 +7,6 @@ export interface AgentConfig {
   model: string;
   apiKey?: string;
   baseUrl?: string;
-  systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
   maxIterations?: number;

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool } from "./tools";
-import { todoManager } from "./scheduler";
+import { todoManager, skillsSystem } from "./scheduler";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -23,11 +23,12 @@ export class AgentLoop {
   private tools: Anthropic.Tool[];
   private roundsSinceTodoUpdate: number = 0;
   private readonly NAG_THRESHOLD: number = 3;
+  private skillsInitialized: boolean = false;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
     this.isSubAgent = config.isSubAgent ?? false;
-    this.systemPrompt = config.systemPrompt || this.getDefaultSystemPrompt(this.isSubAgent);
+    this.systemPrompt = this.getDefaultSystemPrompt(this.isSubAgent);
     this.maxTokens = config.maxTokens || 8000;
     this.temperature = config.temperature ?? 0.7;
     this.maxIterations = config.maxIterations || (this.isSubAgent ? 30 : 50);
@@ -48,6 +49,7 @@ export class AgentLoop {
     if (isSubAgent) {
       return `You are a coding subagent at ${process.cwd()}. Complete the given task efficiently using available tools. Return only a summary of what you accomplished.`;
     }
+
     return `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.`;
   }
 
@@ -55,6 +57,16 @@ export class AgentLoop {
    * 运行 agent loop
    */
   async run(userMessage: string): Promise<string> {
+    // 首次运行时初始化技能系统，将技能目录追加到系统提示词
+    if (!this.isSubAgent && !this.skillsInitialized) {
+      this.skillsInitialized = true;
+      await skillsSystem.init();
+      if (skillsSystem.hasSkills()) {
+        const catalog = skillsSystem.describeCatalog();
+        this.systemPrompt += `\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\n`;
+      }
+    }
+
     this.messages.push({
       role: "user",
       content: userMessage,

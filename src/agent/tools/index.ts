@@ -1,6 +1,6 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
-import { todoManager } from "../scheduler";
+import { todoManager, skillsSystem } from "../scheduler";
 import Anthropic from "@anthropic-ai/sdk";
 
 
@@ -130,6 +130,20 @@ export const TOOLS = [
       required: ["items"],
     },
   },
+  {
+    name: "load_skill",
+    description: "Load the full body of a named skill into the current context. Use this when a task needs specialized instructions before you act.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "The name of the skill to load",
+        },
+      },
+      required: ["name"],
+    },
+  },
 ];
 
 /**
@@ -145,6 +159,7 @@ const TOOL_HANDLERS: Record<
   write_file: (input) => runWrite(input.path, input.content),
   edit_file: (input) => runEdit(input.path, input.old_text, input.new_text),
   todo: (input) => Promise.resolve(todoManager.update(input.items)),
+  load_skill: (input) => Promise.resolve(skillsSystem.loadSkill(input.name)),
 };
 
 /**
