@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import type { AgentConfig } from '../agent/types';
-import chalk from 'chalk';
 
 /**
  * Agent 配置
@@ -15,14 +14,4 @@ export const agentConfig: AgentConfig = {
   maxTokens: 8000,
   temperature: 0.7,
   maxIterations: 50,
-  hooks: {
-    onBeforeCall: () => {
-    },
-    onToolCall: (toolName: string) => {
-      console.log(chalk.blue(`🔧 使用工具: ${toolName}`));
-    },
-    onError: (error: Error) => {
-      console.error(chalk.red(`❌ 错误: ${error.message}`));
-    },
-  },
 };

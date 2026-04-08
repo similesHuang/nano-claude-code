@@ -1,1 +1,1 @@
-export { TodoManager, todoManager, type TodoItem } from "./todoManager";
+export { todoManager, type TodoItem } from "./todoManager";

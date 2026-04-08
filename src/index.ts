@@ -100,10 +100,35 @@ ${chalk.gray('─'.repeat(50))}
     process.stdout.write('\r' + ANSI.clearLine + prompt + chalk.white(before) + chalk.dim(after));
   }
 
+  /**
+   * 生成工具调用的摘要信息
+   */
+  private getToolSummary(toolName: string, toolInput: any): string {
+    switch (toolName) {
+      case 'bash':
+        return chalk.dim(toolInput.command?.slice(0, 50) || '');
+      case 'read_file':
+        return chalk.dim(toolInput.path || '');
+      case 'write_file':
+        return chalk.dim(toolInput.path || '');
+      case 'edit_file':
+        return chalk.dim(toolInput.path || '');
+      case 'task':
+        return chalk.dim(toolInput.description || toolInput.prompt?.slice(0, 30) || '');
+      case 'todo':
+        return chalk.dim(`${toolInput.items?.length || 0} items`);
+      default:
+        return '';
+    }
+  }
+
   private async runREPL() {
     let isRunning = false;
 
-    const handleKeypress = (str: string, key: any) => {
+    const handleKeypress = (str: string | undefined, key: any) => {
+      // 忽略无效输入
+      if (str === undefined && !key.name) return;
+
       const { buffer, cursor, history, historyIndex } = this.state;
 
       // Ctrl+C - 退出
@@ -219,7 +244,7 @@ ${chalk.gray('─'.repeat(50))}
       }
 
       // 普通字符
-      if (str && !key.ctrl && !key.meta && str !== '\r' && str !== '\n') {
+      if (str && !key.ctrl && !key.meta) {
         this.state.buffer = buffer.slice(0, cursor) + str + buffer.slice(cursor);
         this.state.cursor++;
         this.render();
@@ -235,7 +260,7 @@ ${chalk.gray('─'.repeat(50))}
 
       // 等待输入
       await new Promise<void>((resolve) => {
-        const onKeypress = (str: string, key: any) => {
+        const onKeypress = (str: string | undefined, key: any) => {
           const isEnter = key.name === 'enter' || key.name === 'return' || str === '\r';
           if (isEnter && !key.shift) {
             process.stdin.removeListener('keypress', onKeypress);
@@ -279,24 +304,20 @@ ${chalk.gray('─'.repeat(50))}
       try {
         spinner.start('思考中');
 
-        const hooks = { ...agentConfig.hooks };
-
-        const origToolCall = hooks.onToolCall;
-        hooks.onToolCall = async (toolName: string, toolInput: any) => {
-          spinner.stop();
-          this.print(`\n  ${chalk.magenta('⚡')} ${chalk.blue(toolName)}`);
-          spinner.start('执行中');
-          await origToolCall?.(toolName, toolInput);
+        const callbacks = {
+          onToolCall: (toolName: string, toolInput: any) => {
+            spinner.stop();
+            const summary = this.getToolSummary(toolName, toolInput);
+            this.print(`\n  ${chalk.magenta('⚡')} ${chalk.blue(toolName)} ${chalk.dim(summary)}`);
+            spinner.start('执行中');
+          },
+          onError: (error: Error) => {
+            spinner.stop();
+            this.print(chalk.red(`\n  ✗ ${error.message}`));
+          },
         };
 
-        const origError = hooks.onError;
-        hooks.onError = async (error: Error) => {
-          spinner.stop();
-          this.print(chalk.red(`  ✗ ${error.message}`));
-          await origError?.(error);
-        };
-
-        const agent = new AgentLoop({ ...agentConfig, hooks });
+        const agent = new AgentLoop(agentConfig, callbacks);
         const response = await agent.run(input);
 
         spinner.stop();

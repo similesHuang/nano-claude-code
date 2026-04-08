@@ -10,20 +10,16 @@ export interface AgentConfig {
   systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
-  maxIterations?: number; // 防止无限循环
-  hooks?: AgentHooks;
+  maxIterations?: number;
+  isSubAgent?: boolean;
 }
 
 /**
- * 钩子系统 - 用于扩展和监控
+ * 回调接口 - 用于 CLI 等外部监听工具执行
  */
-export interface AgentHooks {
-  onBeforeCall?: (messages: Anthropic.MessageParam[]) => void | Promise<void>;
-  onAfterCall?: (response: Anthropic.Message) => void | Promise<void>;
-  onToolCall?: (toolName: string, input: any) => void | Promise<void>;
-  onToolResult?: (toolName: string, output: string) => void | Promise<void>;
-  onError?: (error: Error) => void | Promise<void>;
-  onComplete?: () => void | Promise<void>;
+export interface AgentCallbacks {
+  onToolCall?: (toolName: string, input: any) => void;
+  onError?: (error: Error) => void;
 }
 
 /**

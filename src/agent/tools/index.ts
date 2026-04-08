@@ -1,6 +1,30 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
 import { todoManager } from "../scheduler";
+import Anthropic from "@anthropic-ai/sdk";
+
+
+/**
+ * task 工具定义 - 只在主代理中注册
+ */
+export const TASK_TOOL: Anthropic.Tool = {
+  name: "task",
+  description: "Spawn a subagent with fresh context to handle a subtask. The subagent shares the filesystem but has its own isolated conversation history. Use this to delegate complex or independent subtasks.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      prompt: {
+        type: "string",
+        description: "The task description for the subagent",
+      },
+      description: {
+        type: "string",
+        description: "Brief description of the subtask",
+      },
+    },
+    required: ["prompt"],
+  },
+};
 
 /**
  * 工具定义数组 - Anthropic API 格式
