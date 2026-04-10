@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool } from "./tools";
-import { todoManager, skillsSystem } from "./scheduler";
+import { todoManager, skillsSystem } from "./systems";
 
 /**
  * AgentLoop - 核心 AI 代理循环

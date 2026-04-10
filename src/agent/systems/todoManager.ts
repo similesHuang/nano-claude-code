@@ -70,9 +70,9 @@ export class TodoManager {
     const lines: string[] = [];
     for (const item of this.items) {
       const marker = {
-        pending: "[ ]",
-        in_progress: "[>]",
-        completed: "[x]",
+        pending: "🕘",
+        in_progress: "🔄",
+        completed: "✅",
       }[item.status];
       lines.push(`${marker} #${item.id}: ${item.text}`);
     }

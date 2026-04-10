@@ -1,6 +1,6 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
-import { todoManager, skillsSystem } from "../scheduler";
+import { todoManager, skillsSystem } from "../systems";
 import Anthropic from "@anthropic-ai/sdk";
 
 

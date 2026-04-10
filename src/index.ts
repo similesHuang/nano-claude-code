@@ -104,22 +104,68 @@ ${chalk.gray('─'.repeat(50))}
    * 生成工具调用的摘要信息
    */
   private getToolSummary(toolName: string, toolInput: any): string {
-    switch (toolName) {
-      case 'bash':
-        return chalk.dim(toolInput.command?.slice(0, 50) || '');
-      case 'read_file':
-        return chalk.dim(toolInput.path || '');
-      case 'write_file':
-        return chalk.dim(toolInput.path || '');
-      case 'edit_file':
-        return chalk.dim(toolInput.path || '');
-      case 'task':
-        return chalk.dim(toolInput.description || toolInput.prompt?.slice(0, 30) || '');
-      case 'todo':
-        return chalk.dim(`${toolInput.items?.length || 0} items`);
-      default:
-        return '';
+
+    if (!toolInput || typeof toolInput !== 'object') {
+      return '';
     }
+
+    const preferredFields = [
+      'command',
+      'path',
+      'filePath',
+      'description',
+      'prompt',
+      'query',
+      'name',
+      'id',
+    ] as const;
+
+    for (const key of preferredFields) {
+      const value = toolInput[key];
+      if (typeof value === 'string' && value.trim()) {
+        return chalk.dim(value.slice(0, 60));
+      }
+    }
+
+    if (toolName === 'todo' && Array.isArray(toolInput.items)) {
+      const itemsPreview = toolInput.items
+        .slice(0, 6)
+        .map((item: any, index: number) => {
+          const status = String(item?.status || '').toLowerCase();
+          const marker = {
+            pending: '🕘',
+            in_progress: '🔄',
+            completed: '✅',
+            'not-started': '🕘',
+            'in-progress': '🔄',
+          }[status] || '❔';
+          const text = String(item?.text || item?.title || item?.task || '').trim();
+          const label = text ? text.slice(0, 16) : `item${index + 1}`;
+          return `${marker}${label}`;
+        })
+        .join(' ');
+
+      const extra = toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : '';
+      return chalk.dim(itemsPreview + extra);
+    }
+
+    if (Array.isArray(toolInput.items)) {
+      return chalk.dim(`${toolInput.items.length} items`);
+    }
+
+    const compact = Object.entries(toolInput)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .slice(0, 2)
+      .map(([key, value]) => {
+        if (typeof value === 'string') return `${key}=${value.slice(0, 24)}`;
+        if (typeof value === 'number' || typeof value === 'boolean') return `${key}=${String(value)}`;
+        if (Array.isArray(value)) return `${key}=[${value.length}]`;
+        if (typeof value === 'object') return `${key}={...}`;
+        return key;
+      })
+      .join(' ');
+
+    return compact ? chalk.dim(compact) : '';
   }
 
   private async runREPL() {
