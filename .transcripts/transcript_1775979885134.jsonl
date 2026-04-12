@@ -1,0 +1,3 @@
+{"role":"user","content":"吃饭吃饭吃饭吃饭，使用compact压缩"}
+{"role":"assistant","content":[{"thinking":"用户说\"吃饭吃饭吃饭吃饭\"，然后要求使用compact压缩。这看起来像是一个测试请求或者用户想要压缩某些内容。但是\"吃饭\"这个词的意思是\"eat\"，这似乎不太相关。\n\n让我用compact函数来压缩对话上下文。用户可能是在测试系统或者想要我压缩之前的对话。\n\n不过等等，我还没有进行任何对话，所以compact可能没有太多内容可以压缩。让我尝试一下compact功能。","signature":"03c0cac4b53faafbed7558f12ce53abb7e824ebaa224f71ac79a3f2d646c07bf","type":"thinking"},{"text":"好的，让我压缩一下当前对话上下文：\n","type":"text"},{"type":"tool_use","id":"call_function_ifdccqwx3kpf_1","name":"compact","input":{"focus":"处理用户请求"}}]}
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_function_ifdccqwx3kpf_1","content":"Compacting conversation...","is_error":false}]}

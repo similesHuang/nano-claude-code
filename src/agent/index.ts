@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool } from "./tools";
-import { todoManager, skillsSystem } from "./systems";
+import { todoManager, skillsSystem, CompactSystem } from "./systems";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -24,6 +24,7 @@ export class AgentLoop {
   private roundsSinceTodoUpdate: number = 0;
   private readonly NAG_THRESHOLD: number = 3;
   private skillsInitialized: boolean = false;
+  private compactSystem: CompactSystem;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -40,6 +41,7 @@ export class AgentLoop {
     if (config.baseUrl) clientConfig.baseURL = config.baseUrl;
 
     this.client = new Anthropic(clientConfig);
+    this.compactSystem = new CompactSystem(process.cwd(), config.compact);
 
     // 构建工具列表：子代理不需要 task 工具（避免无限递归）
     this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
@@ -90,6 +92,15 @@ export class AgentLoop {
     while (iteration < this.maxIterations) {
       iteration++;
 
+      this.messages = this.compactSystem.microCompact(this.messages);
+
+      if (this.compactSystem.shouldAutoCompact(this.messages)) {
+        this.messages = await this.compactSystem.compactHistory(
+          this.messages,
+          (messages) => this.summarizeHistory(messages),
+        );
+      }
+
       const response = await this.client.messages.create({
         model: this.model,
         system: this.systemPrompt,
@@ -109,12 +120,21 @@ export class AgentLoop {
       }
 
       try {
-        const { results: toolResults, usedTodo } = await this.executeTools(response.content);
+        const { results: toolResults, usedTodo, manualCompact, compactFocus } = await this.executeTools(response.content);
 
         this.messages.push({
           role: "user",
           content: toolResults,
         });
+
+        if (manualCompact) {
+          this.messages = await this.compactSystem.compactHistory(
+            this.messages,
+            (messages) => this.summarizeHistory(messages),
+            compactFocus,
+          );
+          continue;
+        }
 
         // todo nag 只在主代理中生效
         if (!this.isSubAgent) {
@@ -147,15 +167,32 @@ export class AgentLoop {
    */
   private async executeTools(
     content: Array<Anthropic.ContentBlock>,
-  ): Promise<{ results: ToolExecutionResult[]; usedTodo: boolean }> {
+  ): Promise<{ results: ToolExecutionResult[]; usedTodo: boolean; manualCompact: boolean; compactFocus?: string }> {
     const results: ToolExecutionResult[] = [];
     let usedTodo = false;
+    let manualCompact = false;
+    let compactFocus: string | undefined;
 
     for (const block of content) {
       if (block.type !== "tool_use") continue;
 
       if (todoManager.isTodoTool(block.name)) {
         usedTodo = true;
+      }
+
+      if (block.name === "compact") {
+        manualCompact = true;
+        const focus = (block.input as { focus?: string })?.focus;
+        if (typeof focus === "string" && focus.trim()) {
+          compactFocus = focus;
+        }
+      }
+
+      if (
+        (block.name === "read_file" || block.name === "write_file" || block.name === "edit_file") &&
+        typeof (block.input as { path?: string })?.path === "string"
+      ) {
+        this.compactSystem.trackRecentFile((block.input as { path: string }).path);
       }
 
       try {
@@ -169,6 +206,9 @@ export class AgentLoop {
           this.callbacks.onToolCall?.(block.name, block.input);
           output = await executeTool(block.name, block.input);
         }
+         
+        // 大工具结果先写磁盘再返回路径，避免占用上下文
+        output = await this.compactSystem.persistLargeOutput(block.id, output);
 
         results.push({
           type: "tool_result",
@@ -188,7 +228,37 @@ export class AgentLoop {
       }
     }
 
-    return { results, usedTodo };
+    return { results, usedTodo, manualCompact, compactFocus };
+  }
+
+  private async summarizeHistory(messages: Anthropic.MessageParam[]): Promise<string> {
+    const conversation = JSON.stringify(messages).slice(0, 80000);
+    const prompt = [
+      "Summarize this coding-agent conversation so work can continue.",
+      "Preserve:",
+      "1. The current goal",
+      "2. Important findings and decisions",
+      "3. Files read or changed",
+      "4. Remaining work",
+      "5. User constraints and preferences",
+      "Be compact but concrete.",
+      "",
+      conversation,
+    ].join("\n");
+
+    const response = await this.client.messages.create({
+      model: this.model,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 2000,
+    });
+
+    const summary = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+
+    return summary || "Summary unavailable.";
   }
 
   /**

@@ -131,6 +131,19 @@ export const TOOLS = [
     },
   },
   {
+    name: "compact",
+    description: "Summarize earlier conversation so work can continue in a smaller context.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        focus: {
+          type: "string",
+          description: "Optional focus to preserve in the summary",
+        },
+      },
+    },
+  },
+  {
     name: "load_skill",
     description: "Load the full body of a named skill into the current context. Use this when a task needs specialized instructions before you act.",
     input_schema: {
@@ -159,6 +172,7 @@ const TOOL_HANDLERS: Record<
   write_file: (input) => runWrite(input.path, input.content),
   edit_file: (input) => runEdit(input.path, input.old_text, input.new_text),
   todo: (input) => Promise.resolve(todoManager.update(input.items)),
+  compact: () => Promise.resolve("Compacting conversation..."),
   load_skill: (input) => Promise.resolve(skillsSystem.loadSkill(input.name)),
 };
 

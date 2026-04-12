@@ -1,5 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
+export interface CompactConfig {
+  contextLimit?: number;
+  keepRecentToolResults?: number;
+  persistThreshold?: number;
+  previewChars?: number;
+}
+
 /**
  * Agent 配置
  */
@@ -11,6 +18,7 @@ export interface AgentConfig {
   temperature?: number;
   maxIterations?: number;
   isSubAgent?: boolean;
+  compact?: CompactConfig;
 }
 
 /**
