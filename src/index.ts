@@ -1,407 +1,146 @@
 #!/usr/bin/env node
-import chalk from 'chalk';
-import readline from 'readline';
-import { Command } from 'commander';
-import { AgentLoop } from './agent';
-import { agentConfig } from './config';
-import { Spinner } from './ui/ui';
-
-// ANSI escape codes
-const ANSI = {
-  clearLine: '\x1b[2K',
-  clearScreen: '\x1b[2J',
-  cursorHide: '\x1b[?25l',
-  cursorShow: '\x1b[?25h',
-  cursorUp: (n: number) => `\x1b[${n}A`,
-  cursorDown: (n: number) => `\x1b[${n}B`,
-  cursorRight: (n: number) => `\x1b[${n}C`,
-  cursorLeft: (n: number) => `\x1b[${n}D`,
-};
-
-// Input state
-interface InputState {
-  buffer: string;
-  cursor: number;
-  history: string[];
-  historyIndex: number;
-  prompt: string;
-}
+import chalk from "chalk";
+import { Command } from "commander";
+import { AgentLoop } from "./agent";
+import { agentConfig } from "./config";
+import { PERMISSION_MODES, type PermissionMode } from "./agent/extensions";
+import {
+  Spinner,
+  Renderer,
+  InputHandler,
+  CommandRegistry,
+  registerBuiltinCommands,
+} from "./ui";
 
 class ClaudeCLI {
-  private state: InputState;
+  private renderer = new Renderer();
+  private spinner = new Spinner();
+  private commands = new CommandRegistry();
+  private input: InputHandler;
+  private permissionMode: PermissionMode = "default";
+  private running = false;
 
   constructor() {
-    this.state = {
-      buffer: '',
-      cursor: 0,
-      history: [],
-      historyIndex: -1,
-      prompt: chalk.cyan('➜') + ' ',
-    };
+    this.input = new InputHandler(this.renderer, this.commands);
+
+    registerBuiltinCommands(this.commands, this.renderer, {
+      getPermissionMode: () => this.permissionMode,
+      setPermissionMode: (m) => { this.permissionMode = m as PermissionMode; },
+      permissionModes: PERMISSION_MODES,
+      onExit: () => this.exit(),
+      onClear: () => this.renderer.print(chalk.gray("  对话已清空\n")),
+    });
   }
 
   async start() {
-    this.setupTerminal();
-    this.printBanner();
-    this.printHelp();
-    await this.runREPL();
-  }
-
-  private setupTerminal() {
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode?.(true);
-    }
-    readline.emitKeypressEvents(process.stdin);
-
-    process.on('exit', () => {
-      process.stdout.write(ANSI.cursorShow);
+    this.input.setupTerminal();
+    process.on("SIGINT", () => {
+      if (!this.running) this.exit();
     });
 
-    process.on('SIGINT', () => {
-      this.exit();
-    });
+    this.renderer.banner();
+    // 启动时显示帮助
+    this.commands.tryExecute("/help");
+    await this.repl();
   }
 
-  private print(msg: string) {
-    console.log(msg);
-  }
-
-  private printBanner() {
-    this.print(`
-${chalk.cyan('    _')}
-${chalk.cyan('   (_)___ ____ ____   ____   __  ______  ____')}
-${chalk.cyan('   / / __ \\\\_  _ \\\\'  ) + chalk.blue('_  _ ') + chalk.cyan('\\\\  \\ / /\\ \\ / / / ___/ / __ \\')}
-${chalk.cyan('  / / /_/ // / // /_\\ \\/  \\ V / / /__  / /_/ /')}
-${chalk.cyan(' / /\\____//_/ /_/\\____/\\____/ \\_/ \\___/  \\____/')}
-
-${chalk.gray('─'.repeat(50))}
-${chalk.blue('nano-claude-code')} ${chalk.dim('v1.0.0')}
-${chalk.gray('─'.repeat(50))}
-`);
-  }
-
-  private printHelp() {
-    this.print(chalk.dim(`
-  ${chalk.cyan('Enter')}          发送消息
-  ${chalk.cyan('Shift+Enter')}    换行输入
-  ${chalk.cyan('↑ / ↓')}          历史记录
-  ${chalk.cyan('← / →')}          移动光标
-  ${chalk.cyan('Ctrl+A / E')}      行首 / 行尾
-  ${chalk.cyan('Ctrl+U')}          清空输入
-  ${chalk.cyan('Ctrl+C')}          退出
-`));
-  }
-
-  private render() {
-    const { buffer, cursor, prompt } = this.state;
-    const before = buffer.slice(0, cursor);
-    const after = buffer.slice(cursor);
-
-    process.stdout.write('\r' + ANSI.clearLine + prompt + chalk.white(before) + chalk.dim(after));
-  }
-
-  /**
-   * 生成工具调用的摘要信息
-   */
-  private getToolSummary(toolName: string, toolInput: any): string {
-
-    if (!toolInput || typeof toolInput !== 'object') {
-      return '';
-    }
-
-    const preferredFields = [
-      'command',
-      'path',
-      'filePath',
-      'description',
-      'prompt',
-      'query',
-      'name',
-      'id',
-    ] as const;
-
-    for (const key of preferredFields) {
-      const value = toolInput[key];
-      if (typeof value === 'string' && value.trim()) {
-        return chalk.dim(value.slice(0, 60));
-      }
-    }
-
-    if (toolName === 'todo' && Array.isArray(toolInput.items)) {
-      const itemsPreview = toolInput.items
-        .slice(0, 6)
-        .map((item: any, index: number) => {
-          const status = String(item?.status || '').toLowerCase();
-          const marker = {
-            pending: '🕘',
-            in_progress: '🔄',
-            completed: '✅',
-            'not-started': '🕘',
-            'in-progress': '🔄',
-          }[status] || '❔';
-          const text = String(item?.text || item?.title || item?.task || '').trim();
-          const label = text ? text.slice(0, 16) : `item${index + 1}`;
-          return `${marker}${label}`;
-        })
-        .join(' ');
-
-      const extra = toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : '';
-      return chalk.dim(itemsPreview + extra);
-    }
-
-    if (Array.isArray(toolInput.items)) {
-      return chalk.dim(`${toolInput.items.length} items`);
-    }
-
-    const compact = Object.entries(toolInput)
-      .filter(([, value]) => value !== undefined && value !== null)
-      .slice(0, 2)
-      .map(([key, value]) => {
-        if (typeof value === 'string') return `${key}=${value.slice(0, 24)}`;
-        if (typeof value === 'number' || typeof value === 'boolean') return `${key}=${String(value)}`;
-        if (Array.isArray(value)) return `${key}=[${value.length}]`;
-        if (typeof value === 'object') return `${key}={...}`;
-        return key;
-      })
-      .join(' ');
-
-    return compact ? chalk.dim(compact) : '';
-  }
-
-  private async runREPL() {
-    let isRunning = false;
-
-    const handleKeypress = (str: string | undefined, key: any) => {
-      // 忽略无效输入
-      if (str === undefined && !key.name) return;
-
-      const { buffer, cursor, history, historyIndex } = this.state;
-
-      // Ctrl+C - 退出
-      if (key.ctrl && key.name === 'c') {
-        if (isRunning) {
-          isRunning = false;
-          this.print('\n' + chalk.yellow('  (中断)'));
-        } else {
-          this.exit();
-        }
-        return;
-      }
-
-      // Ctrl+U - 清空
-      if (key.ctrl && key.name === 'u') {
-        this.state.buffer = '';
-        this.state.cursor = 0;
-        this.render();
-        return;
-      }
-
-      // Ctrl+L - 清屏
-      if (key.ctrl && key.name === 'l') {
-        process.stdout.write(ANSI.clearScreen);
-        this.print('');
-        this.render();
-        return;
-      }
-
-      // Ctrl+A - 行首
-      if (key.ctrl && key.name === 'a') {
-        this.state.cursor = 0;
-        this.render();
-        return;
-      }
-
-      // Ctrl+E - 行尾
-      if (key.ctrl && key.name === 'e') {
-        this.state.cursor = buffer.length;
-        this.render();
-        return;
-      }
-
-      // ↑ - 历史上一条
-      if (key.name === 'up') {
-        if (history.length === 0) return;
-        if (historyIndex < history.length - 1) {
-          this.state.historyIndex++;
-          this.state.buffer = history[historyIndex];
-          this.state.cursor = this.state.buffer.length;
-          this.render();
-        }
-        return;
-      }
-
-      // ↓ - 历史下一条
-      if (key.name === 'down') {
-        if (historyIndex > 0) {
-          this.state.historyIndex--;
-          this.state.buffer = history[historyIndex];
-        } else if (historyIndex === 0) {
-          this.state.historyIndex = -1;
-          this.state.buffer = '';
-        }
-        this.state.cursor = this.state.buffer.length;
-        this.render();
-        return;
-      }
-
-      // ← - 左移
-      if (key.name === 'left') {
-        if (cursor > 0) {
-          this.state.cursor--;
-          this.render();
-        }
-        return;
-      }
-
-      // → - 右移
-      if (key.name === 'right') {
-        if (cursor < buffer.length) {
-          this.state.cursor++;
-          this.render();
-        }
-        return;
-      }
-
-      // Backspace
-      if (key.name === 'backspace') {
-        if (cursor > 0) {
-          this.state.buffer = buffer.slice(0, cursor - 1) + buffer.slice(cursor);
-          this.state.cursor--;
-          this.render();
-        }
-        return;
-      }
-
-      // Delete
-      if (key.name === 'delete') {
-        if (cursor < buffer.length) {
-          this.state.buffer = buffer.slice(0, cursor) + buffer.slice(cursor + 1);
-          this.render();
-        }
-        return;
-      }
-
-      // Shift+Enter - 换行
-      if (key.shift && (key.name === 'enter' || key.name === 'return')) {
-        this.state.buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
-        this.state.cursor++;
-        this.render();
-        return;
-      }
-
-      // 普通字符
-      if (str && !key.ctrl && !key.meta) {
-        this.state.buffer = buffer.slice(0, cursor) + str + buffer.slice(cursor);
-        this.state.cursor++;
-        this.render();
-      }
-    };
-
-    // 主循环
+  private async repl() {
     while (true) {
-      this.state.buffer = '';
-      this.state.cursor = 0;
-      this.state.historyIndex = -1;
-      this.render();
+      const text = await this.input.waitForInput();
 
-      // 等待输入
-      await new Promise<void>((resolve) => {
-        const onKeypress = (str: string | undefined, key: any) => {
-          const isEnter = key.name === 'enter' || key.name === 'return' || str === '\r';
-          if (isEnter && !key.shift) {
-            process.stdin.removeListener('keypress', onKeypress);
-            this.print(''); // 换行
-            resolve();
-          } else {
-            handleKeypress(str, key);
-          }
-        };
-        process.stdin.on('keypress', onKeypress);
-      });
-
-      const input = this.state.buffer.trim();
-
-      if (!input) continue;
-
-      // 添加到历史
-      if (this.state.history[this.state.history.length - 1] !== this.state.buffer) {
-        this.state.history.push(this.state.buffer);
-      }
-
-      // 命令处理
-      if (input === '/exit' || input === 'exit' || input === 'quit') {
+      // Ctrl+C 信号
+      if (text === "\x03") {
+        if (this.running) {
+          this.running = false;
+          this.renderer.print("\n" + chalk.yellow("  (中断)"));
+          continue;
+        }
         this.exit();
       }
 
-      if (input === '/help' || input === 'help') {
-        this.printHelp();
-        continue;
-      }
+      if (!text) continue;
 
-      if (input === '/clear' || input === 'clear') {
-        this.print(chalk.gray('  对话已清空\n'));
-        continue;
-      }
+      // 尝试作为斜杠命令执行
+      if (this.commands.tryExecute(text)) continue;
 
-      // 运行 Agent
-      isRunning = true;
-      const spinner = new Spinner();
+      // 兼容旧的无 / 命令
+      if (text === "exit" || text === "quit") this.exit();
+      if (text === "help") { this.commands.tryExecute("/help"); continue; }
+      if (text === "clear") { this.commands.tryExecute("/clear"); continue; }
 
-      try {
-        spinner.start('思考中');
-
-        const callbacks = {
-          onToolCall: (toolName: string, toolInput: any) => {
-            spinner.stop();
-            const summary = this.getToolSummary(toolName, toolInput);
-            this.print(`\n  ${chalk.magenta('⚡')} ${chalk.blue(toolName)} ${chalk.dim(summary)}`);
-            spinner.start('执行中');
-          },
-          onError: (error: Error) => {
-            spinner.stop();
-            this.print(chalk.red(`\n  ✗ ${error.message}`));
-          },
-        };
-
-        const agent = new AgentLoop(agentConfig, callbacks);
-        const response = await agent.run(input);
-
-        spinner.stop();
-
-        // 显示响应
-        this.print(chalk.gray('\n  ┌─') + chalk.green(' Claude ') + chalk.gray('─'.repeat(32)));
-        for (const line of response.split('\n')) {
-          this.print(chalk.gray('  │ ') + line);
-        }
-        this.print(chalk.gray('  └' + '─'.repeat(38)) + '\n');
-
-      } catch (error) {
-        spinner.stop();
-        this.print(chalk.red(`\n  ✗ ${error instanceof Error ? error.message : String(error)}\n`));
-      }
-
-      isRunning = false;
+      await this.runAgent(text);
     }
   }
 
+  private async runAgent(input: string) {
+    this.running = true;
+    this.spinner.start("思考中");
+
+    try {
+      const callbacks = {
+        onToolCall: (name: string, toolInput: any) => {
+          this.spinner.stop();
+          const summary = this.renderer.formatToolSummary(name, toolInput);
+          this.renderer.toolCall(name, summary);
+          this.spinner.start("执行中");
+        },
+        onError: (error: Error) => {
+          this.spinner.stop();
+          this.renderer.error(error.message);
+        },
+        onPermissionDenied: (name: string, reason: string) => {
+          this.spinner.stop();
+          this.renderer.permissionDenied(name, reason);
+          this.spinner.start("思考中");
+        },
+        onPermissionAsk: async (
+          name: string,
+          toolInput: any,
+          reason: string,
+        ): Promise<"y" | "n" | "always"> => {
+          this.spinner.stop();
+          this.renderer.permissionAsk(name, toolInput, reason);
+          this.renderer.permissionPrompt();
+
+          const ch = await this.input.waitForKey(["y", "n", "a"]);
+          const answer = ch === "a" ? "always" : ch === "y" ? "y" : "n";
+          this.renderer.print(answer);
+          this.spinner.start("执行中");
+          return answer;
+        },
+      };
+
+      const config = { ...agentConfig, permissionMode: this.permissionMode };
+      const agent = new AgentLoop(config, callbacks);
+      const response = await agent.run(input);
+
+      this.spinner.stop();
+      this.renderer.response(response);
+    } catch (error) {
+      this.spinner.stop();
+      this.renderer.error(error instanceof Error ? error.message : String(error));
+    }
+
+    this.running = false;
+  }
+
   private exit() {
-    this.print(chalk.gray('\n  👋 再见!\n'));
-    process.stdout.write(ANSI.cursorShow);
+    this.renderer.print(chalk.gray("\n  👋 再见!\n"));
+    process.stdout.write("\x1b[?25h");
     process.exit(0);
   }
 }
 
 // CLI 入口
 const program = new Command();
-
 program
-  .name('nano-claude-code')
-  .description('A lightweight Claude AI coding agent')
-  .version('1.0.0')
+  .name("nano-claude-code")
+  .description("A lightweight Claude AI coding agent")
+  .version("1.0.0")
   .action(() => {
     const cli = new ClaudeCLI();
     cli.start().catch((err) => {
-      console.error(chalk.red('启动失败:'), err.message);
+      console.error(chalk.red("启动失败:"), err.message);
       process.exit(1);
     });
   });

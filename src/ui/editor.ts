@@ -20,31 +20,33 @@ export class ReadlineEditor {
   }
 
   /**
-   * 获取上一条历史
+   * 获取上一条历史（从最近往最旧）
    */
   prevHistory(): string | null {
     if (this.history.length === 0) return null;
 
-    if (this.historyIndex < this.history.length - 1) {
-      this.historyIndex++;
+    if (this.historyIndex === -1) {
+      this.historyIndex = this.history.length - 1;
+    } else if (this.historyIndex > 0) {
+      this.historyIndex--;
     }
 
     return this.history[this.historyIndex];
   }
 
   /**
-   * 获取下一条历史
+   * 获取下一条历史（从最旧往最近）
    */
   nextHistory(): string | null {
-    if (this.historyIndex > 0) {
-      this.historyIndex--;
+    if (this.historyIndex === -1) return null;
+
+    if (this.historyIndex < this.history.length - 1) {
+      this.historyIndex++;
       return this.history[this.historyIndex];
-    } else if (this.historyIndex === 0) {
+    } else {
       this.historyIndex = -1;
       return '';
     }
-
-    return null;
   }
 
   /**

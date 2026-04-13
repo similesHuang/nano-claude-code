@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type { PermissionMode } from "./extensions/permissionManager";
 
 export interface CompactConfig {
   contextLimit?: number;
@@ -19,6 +20,7 @@ export interface AgentConfig {
   maxIterations?: number;
   isSubAgent?: boolean;
   compact?: CompactConfig;
+  permissionMode?: PermissionMode;
 }
 
 /**
@@ -27,6 +29,8 @@ export interface AgentConfig {
 export interface AgentCallbacks {
   onToolCall?: (toolName: string, input: any) => void;
   onError?: (error: Error) => void;
+  onPermissionAsk?: (toolName: string, toolInput: any, reason: string) => Promise<"y" | "n" | "always">;
+  onPermissionDenied?: (toolName: string, reason: string) => void;
 }
 
 /**

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool } from "./tools";
 import { todoManager, skillsSystem, CompactSystem } from "./systems";
+import { PermissionManager } from "./extensions";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -25,6 +26,7 @@ export class AgentLoop {
   private readonly NAG_THRESHOLD: number = 3;
   private skillsInitialized: boolean = false;
   private compactSystem: CompactSystem;
+  private permissionManager: PermissionManager;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -42,6 +44,7 @@ export class AgentLoop {
 
     this.client = new Anthropic(clientConfig);
     this.compactSystem = new CompactSystem(process.cwd(), config.compact);
+    this.permissionManager = new PermissionManager(config.permissionMode ?? "default");
 
     // 构建工具列表：子代理不需要 task 工具（避免无限递归）
     this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
@@ -198,13 +201,41 @@ export class AgentLoop {
       try {
         let output: string;
 
-        if (block.name === "task") {
-          const { prompt } = block.input as { prompt: string; description?: string };
-          this.callbacks.onToolCall?.(block.name, block.input);
-          output = await this.runSubAgent(prompt);
+        // -- 权限管线 --
+        const decision = this.permissionManager.check(
+          block.name,
+          (block.input as Record<string, any>) ?? {},
+        );
+
+        if (decision.behavior === "deny") {
+          // 直接拒绝，让 LLM 知道
+          this.callbacks.onPermissionDenied?.(block.name, decision.reason);
+          output = `Permission denied: ${decision.reason}`;
+        } else if (decision.behavior === "ask") {
+          // 询问用户
+          const answer = await this.callbacks.onPermissionAsk?.(
+            block.name,
+            block.input,
+            decision.reason,
+          );
+
+          if (answer === "always") {
+            this.permissionManager.addAlwaysAllow(block.name);
+            output = await this.executeSingleTool(block.name, block.input);
+          } else if (answer === "y") {
+            this.permissionManager.recordApproval();
+            output = await this.executeSingleTool(block.name, block.input);
+          } else {
+            // 用户拒绝 or 没有注册回调 → 默认拒绝
+            const circuitBreak = this.permissionManager.recordDenial();
+            output = `Permission denied by user for ${block.name}`;
+            if (circuitBreak) {
+              output += " (连续多次拒绝，建议切换到 plan 模式)";
+            }
+          }
         } else {
-          this.callbacks.onToolCall?.(block.name, block.input);
-          output = await executeTool(block.name, block.input);
+          // allow
+          output = await this.executeSingleTool(block.name, block.input);
         }
          
         // 大工具结果先写磁盘再返回路径，避免占用上下文
@@ -229,6 +260,20 @@ export class AgentLoop {
     }
 
     return { results, usedTodo, manualCompact, compactFocus };
+  }
+
+  /**
+   * 执行单个工具调用（权限检查已通过后调用）
+   */
+  private async executeSingleTool(name: string, input: any): Promise<string> {
+    this.callbacks.onToolCall?.(name, input);
+
+    if (name === "task") {
+      const { prompt } = input as { prompt: string; description?: string };
+      return this.runSubAgent(prompt);
+    }
+
+    return executeTool(name, input);
   }
 
   private async summarizeHistory(messages: Anthropic.MessageParam[]): Promise<string> {

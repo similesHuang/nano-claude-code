@@ -5,20 +5,13 @@ const execAsync = promisify(exec);
 
 /**
  * 执行 shell 命令
+ * 注意：安全校验由 PermissionManager 在上层管线统一处理，
+ * 此处仅保留最基础的纵深防御（double-check）。
  */
 export async function runBash(command: string): Promise<string> {
-    
-    const dangerousPatterns = [
-      "rm -rf /",
-      "sudo",
-      "shutdown",
-      "reboot",
-      "> /dev/",
-      "mkfs",
-      "dd if=",
-    ];
-    
-    if (dangerousPatterns.some(pattern => command.includes(pattern))) {
+
+    // 纵深防御：即使权限管线被绕过，仍拦截最致命的操作
+    if (/\brm\s+(-[a-zA-Z]*)?rf?\s+\/\s*$/.test(command) || /\bsudo\b/.test(command)) {
       return "Error: Dangerous command blocked for safety";
     }
     
