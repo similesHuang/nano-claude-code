@@ -1,3 +1,0 @@
-{"role":"user","content":"吃饭吃饭吃饭吃饭吃饭吃饭吃饭，压缩上下文"}
-{"role":"assistant","content":[{"thinking":"用户说\"吃饭吃饭吃饭吃饭吃饭吃饭吃饭，压缩上下文\"，看起来是：\n1. 重复说\"吃饭\"7次\n2. 要求压缩上下文\n\n这是一个简单的请求，我应该用compact函数来压缩之前的对话上下文。","signature":"185ff6d056884d39acd31cdb90d260605a8b40c9bc01322ee5e8da4b85c6d48a","type":"thinking"},{"type":"tool_use","id":"call_function_v9085c370f9w_1","name":"compact","input":{}}]}
-{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_function_v9085c370f9w_1","content":"Compacting conversation...","is_error":false}]}

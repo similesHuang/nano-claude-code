@@ -105,7 +105,7 @@ export const TOOLS = [
   },
   {
     name: "todo",
-    description: "Update task list. Track progress on multi-step tasks. Mark in_progress before starting, completed when done.",
+    description: "Manage a structured todo list to plan and track multi-step tasks.\n\nWorkflow:\n1. PLAN FIRST: When receiving a complex task, immediately create a todo list with ALL steps as 'pending'.\n2. EXECUTE IN ORDER: Before starting each step, mark it 'in_progress' (only ONE at a time).\n3. MARK DONE: After completing a step, mark it 'completed' immediately, then move to the next.\n\nDo NOT create a todo with items already marked as completed. Always plan first, then execute step by step.",
     input_schema: {
       type: "object" as const,
       properties: {

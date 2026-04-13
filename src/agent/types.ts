@@ -28,6 +28,7 @@ export interface AgentConfig {
  */
 export interface AgentCallbacks {
   onToolCall?: (toolName: string, input: any) => void;
+  onToolResult?: (toolName: string, output: string, isError: boolean) => void;
   onError?: (error: Error) => void;
   onPermissionAsk?: (toolName: string, toolInput: any, reason: string) => Promise<"y" | "n" | "always">;
   onPermissionDenied?: (toolName: string, reason: string) => void;

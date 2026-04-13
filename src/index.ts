@@ -80,9 +80,19 @@ class ClaudeCLI {
       const callbacks = {
         onToolCall: (name: string, toolInput: any) => {
           this.spinner.stop();
-          const summary = this.renderer.formatToolSummary(name, toolInput);
-          this.renderer.toolCall(name, summary);
+          if (name === "load_skill") {
+            const skillName = toolInput?.name || "unknown";
+            this.renderer.skillLoad(skillName, true);
+          } else {
+            const summary = this.renderer.formatToolSummary(name, toolInput);
+            this.renderer.toolCall(name, summary);
+          }
           this.spinner.start("执行中");
+        },
+        onToolResult: (name: string, output: string, isError: boolean) => {
+          this.spinner.stop();
+          this.renderer.toolResult(name, output, isError);
+          this.spinner.start("思考中");
         },
         onError: (error: Error) => {
           this.spinner.stop();

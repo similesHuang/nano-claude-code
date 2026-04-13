@@ -45,6 +45,32 @@ ${chalk.gray("─".repeat(50))}
       `\n  ${chalk.magenta("⚡")} ${chalk.blue(toolName)} ${chalk.dim(summary)}`,
     );
   }
+  
+  toolResult(toolName: string, output: string, isError: boolean) {
+    if (isError) {
+      // 错误：显示首行错误信息
+      const firstLine = output.split("\n")[0].slice(0, 80);
+      this.print(`  ${chalk.dim("⎿  ")}${chalk.red("✗")} ${chalk.red(firstLine)}`);
+    } else {
+      // 成功：只显示对勾
+      this.print(`  ${chalk.dim("⎿  ")}${chalk.green("✔")}`);
+    }
+  }
+
+  skillLoad(skillName: string, success: boolean) {
+    this.print(
+      `\n  ${chalk.cyan("⏺")} ${chalk.cyan("Skill")}${chalk.dim("(")}${chalk.cyan(skillName)}${chalk.dim(")")}`,
+    );
+    if (success) {
+      this.print(
+        `  ${chalk.dim("⎿  ")}${chalk.green("Successfully loaded")}`,
+      );
+    } else {
+      this.print(
+        `  ${chalk.dim("⎿  ")}${chalk.red("Failed to load")}`,
+      );
+    }
+  }
 
   permissionDenied(toolName: string, reason: string) {
     this.print(

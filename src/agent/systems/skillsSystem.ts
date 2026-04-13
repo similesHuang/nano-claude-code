@@ -1,6 +1,7 @@
 
 import { promises as fs } from "fs";
 import * as path from "path";
+import { getDataDir } from "../../config/paths.js";
 
 /**
  * 技能清单 - 轻量元数据，常驻系统提示词
@@ -23,33 +24,45 @@ interface SkillDocument {
  * SkillsSystem - 两层技能加载系统
  *
  * 设计思路（与 Python 参考实现对齐）：
- * 1. 启动时扫描 skills/ 目录，解析每个 SKILL.md 的 frontmatter → 生成轻量目录
+ * 1. 启动时扫描两个 skills 目录，解析每个 SKILL.md 的 frontmatter → 生成轻量目录
+ *    - 全局目录: ~/.nano-claude-code/skills/
+ *    - 项目目录: <cwd>/.claude/skills/（项目级技能优先级更高，同名覆盖全局）
  * 2. 轻量目录注入系统提示词，让模型知道有哪些技能可用
  * 3. 模型通过 load_skill 工具按需加载完整技能正文到上下文
  *
  * 这样既保持提示词精简，又让模型能按需获取任务专属指导。
  */
 export class SkillsSystem {
-  private skillsDir: string;
+  private globalSkillsDir: string;
+  private projectSkillsDir: string;
   private documents: Map<string, SkillDocument> = new Map();
 
-  constructor(skillsDir?: string) {
-    this.skillsDir = skillsDir || path.join(process.cwd(), "skills");
+  constructor(globalSkillsDir: string, projectSkillsDir?: string) {
+    this.globalSkillsDir = globalSkillsDir;
+    this.projectSkillsDir = projectSkillsDir ?? path.join(process.cwd(), ".claude", "skills");
   }
 
   /**
    * 扫描 skills 目录，加载所有 SKILL.md 的元数据和正文
+   * 全局技能先加载，项目技能后加载（同名覆盖）
    */
   async init(): Promise<void> {
     this.documents.clear();
 
+    // 先加载全局技能
+    await this.scanDir(this.globalSkillsDir);
+    // 再加载项目技能（同名覆盖全局）
+    await this.scanDir(this.projectSkillsDir);
+  }
+
+  private async scanDir(dir: string): Promise<void> {
     try {
-      await fs.access(this.skillsDir);
+      await fs.access(dir);
     } catch {
       return; // 目录不存在，静默跳过
     }
 
-    const skillFiles = await this.findSkillFiles(this.skillsDir);
+    const skillFiles = await this.findSkillFiles(dir);
 
     for (const filePath of skillFiles) {
       try {
@@ -153,4 +166,6 @@ export class SkillsSystem {
 }
 
 // 全局单例
-export const skillsSystem = new SkillsSystem();
+export const skillsSystem = new SkillsSystem(
+  path.join(getDataDir(), "skills"),
+);

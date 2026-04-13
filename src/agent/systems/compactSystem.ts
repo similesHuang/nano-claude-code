@@ -12,7 +12,7 @@ export class CompactSystem {
   private hasCompacted = false;
   private lastSummary = "";
   private recentFiles: string[] = [];
-  private readonly workdir: string;
+  private readonly dataDir: string;
   private readonly transcriptDir: string;
   private readonly toolResultsDir: string;
   private readonly contextLimit: number;
@@ -20,10 +20,10 @@ export class CompactSystem {
   private readonly persistThreshold: number;
   private readonly previewChars: number;
 
-  constructor(workdir: string = process.cwd(), config: CompactConfig = {}) {
-    this.workdir = workdir;
-    this.transcriptDir = path.join(this.workdir, ".transcripts");
-    this.toolResultsDir = path.join(this.workdir, ".task_outputs", "tool-results");
+  constructor(dataDir: string, config: CompactConfig = {}) {
+    this.dataDir = dataDir;
+    this.transcriptDir = path.join(this.dataDir, "transcripts");
+    this.toolResultsDir = path.join(this.dataDir, "tool-results");
     this.contextLimit = config.contextLimit ?? DEFAULT_CONTEXT_LIMIT;
     this.keepRecentToolResults =
       config.keepRecentToolResults ?? DEFAULT_KEEP_RECENT_TOOL_RESULTS;
@@ -74,11 +74,11 @@ export class CompactSystem {
     }
 
     const preview = output.slice(0, this.previewChars);
-    const relPath = path.relative(this.workdir, storedPath);
+    const relPath = path.relative(this.dataDir, storedPath);
 
     return [
       "<persisted-output>",
-      `Full output saved to: ${relPath}`,
+      `Full output cached at: ~/.nano-claude-code/${relPath}`,
       "Preview:",
       preview,
       "</persisted-output>",

@@ -91,10 +91,24 @@ export class TodoManager {
   }
 
   /**
-   * 是否需要提醒更新
+   * 是否需要提醒更新：达到轮次阈值 + 有未完成任务
    */
   shouldNag(threshold: number = 3): boolean {
-    return this.roundsSinceUpdate >= threshold;
+    return this.roundsSinceUpdate >= threshold && this.hasIncompleteTasks();
+  }
+
+  /**
+   * 是否存在未完成的任务
+   */
+  hasIncompleteTasks(): boolean {
+    return this.items.some((item) => item.status !== "completed");
+  }
+
+  /**
+   * 重置 nag 计数器
+   */
+  resetNag(): void {
+    this.roundsSinceUpdate = 0;
   }
 
   /**

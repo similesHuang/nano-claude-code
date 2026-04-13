@@ -2,7 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool } from "./tools";
 import { todoManager, skillsSystem, CompactSystem } from "./systems";
-import { PermissionManager } from "./extensions";
+import { PermissionManager, HookManager } from "./extensions";
+import { getDataDir } from "../config/paths.js";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -22,11 +23,11 @@ export class AgentLoop {
   private callbacks: AgentCallbacks;
   private messages: Anthropic.MessageParam[] = [];
   private tools: Anthropic.Tool[];
-  private roundsSinceTodoUpdate: number = 0;
   private readonly NAG_THRESHOLD: number = 3;
   private skillsInitialized: boolean = false;
   private compactSystem: CompactSystem;
   private permissionManager: PermissionManager;
+  private hookManager: HookManager;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -43,8 +44,9 @@ export class AgentLoop {
     if (config.baseUrl) clientConfig.baseURL = config.baseUrl;
 
     this.client = new Anthropic(clientConfig);
-    this.compactSystem = new CompactSystem(process.cwd(), config.compact);
+    this.compactSystem = new CompactSystem(getDataDir(), config.compact);
     this.permissionManager = new PermissionManager(config.permissionMode ?? "default");
+    this.hookManager = new HookManager();
 
     // 构建工具列表：子代理不需要 task 工具（避免无限递归）
     this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
@@ -55,20 +57,28 @@ export class AgentLoop {
       return `You are a coding subagent at ${process.cwd()}. Complete the given task efficiently using available tools. Return only a summary of what you accomplished.`;
     }
 
-    return `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.`;
+    return `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
+
+For complex multi-step tasks, ALWAYS use the todo tool to plan BEFORE acting:
+1. Create a todo list with all steps as "pending"
+2. Mark one step "in_progress", do the work, then mark it "completed"
+3. Repeat until all steps are done
+Never skip the planning phase or mark tasks completed before actually doing them.`;
   }
 
   /**
    * 运行 agent loop
    */
   async run(userMessage: string): Promise<string> {
-    // 首次运行时初始化技能系统，将技能目录追加到系统提示词
+    // 首次运行时初始化 hook 系统和技能系统
     if (!this.isSubAgent && !this.skillsInitialized) {
       this.skillsInitialized = true;
+      await this.hookManager.init();
+      await this.hookManager.runHooks("SessionStart", { tool_name: "", tool_input: {} });
       await skillsSystem.init();
       if (skillsSystem.hasSkills()) {
         const catalog = skillsSystem.describeCatalog();
-        this.systemPrompt += `\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\n`;
+        this.systemPrompt += `\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\nIMPORTANT: After loading a skill, if it contains executable commands (e.g. lines starting with "执行命令", or code blocks marked with "exec"), you MUST execute them using the bash tool.\n`;
       }
     }
 
@@ -142,17 +152,17 @@ export class AgentLoop {
         // todo nag 只在主代理中生效
         if (!this.isSubAgent) {
           if (usedTodo) {
-            this.roundsSinceTodoUpdate = 0;
+            todoManager.resetNag();
           } else {
-            this.roundsSinceTodoUpdate++;
+            todoManager.incrementRound();
           }
 
-          if (this.roundsSinceTodoUpdate >= this.NAG_THRESHOLD) {
+          if (todoManager.shouldNag(this.NAG_THRESHOLD)) {
             this.messages.push({
               role: "user",
               content: "<reminder>Update your todos.</reminder>",
             });
-            this.roundsSinceTodoUpdate = 0;
+            todoManager.resetNag();
           }
         }
       } catch (error) {
@@ -200,12 +210,29 @@ export class AgentLoop {
 
       try {
         let output: string;
+        let toolInput = (block.input as Record<string, any>) ?? {};
+
+        // -- PreToolUse hooks --
+        const hookCtx = { tool_name: block.name, tool_input: { ...toolInput } };
+        const preHook = await this.hookManager.runHooks("PreToolUse", hookCtx);
+
+        if (preHook.blocked) {
+          output = `Tool blocked by hook: ${preHook.blockReason ?? "Blocked by PreToolUse hook"}`;
+          // 注入 hook 消息
+          for (const msg of preHook.messages) {
+            results.push({ type: "tool_result", tool_use_id: block.id, content: `[Hook]: ${msg}` });
+          }
+          results.push({ type: "tool_result", tool_use_id: block.id, content: output, is_error: true });
+          continue;
+        }
+
+        // hook 可能修改了 tool_input
+        if (preHook.updatedInput) {
+          toolInput = preHook.updatedInput as Record<string, any>;
+        }
 
         // -- 权限管线 --
-        const decision = this.permissionManager.check(
-          block.name,
-          (block.input as Record<string, any>) ?? {},
-        );
+        const decision = this.permissionManager.check(block.name, toolInput);
 
         if (decision.behavior === "deny") {
           // 直接拒绝，让 LLM 知道
@@ -215,16 +242,16 @@ export class AgentLoop {
           // 询问用户
           const answer = await this.callbacks.onPermissionAsk?.(
             block.name,
-            block.input,
+            toolInput,
             decision.reason,
           );
 
           if (answer === "always") {
             this.permissionManager.addAlwaysAllow(block.name);
-            output = await this.executeSingleTool(block.name, block.input);
+            output = await this.executeSingleTool(block.name, toolInput);
           } else if (answer === "y") {
             this.permissionManager.recordApproval();
-            output = await this.executeSingleTool(block.name, block.input);
+            output = await this.executeSingleTool(block.name, toolInput);
           } else {
             // 用户拒绝 or 没有注册回调 → 默认拒绝
             const circuitBreak = this.permissionManager.recordDenial();
@@ -235,17 +262,27 @@ export class AgentLoop {
           }
         } else {
           // allow
-          output = await this.executeSingleTool(block.name, block.input);
+          output = await this.executeSingleTool(block.name, toolInput);
+        }
+
+        // -- PostToolUse hooks --
+        const postCtx = { tool_name: block.name, tool_input: toolInput, tool_output: output };
+        const postHook = await this.hookManager.runHooks("PostToolUse", postCtx);
+        for (const msg of postHook.messages) {
+          output += `\n[Hook note]: ${msg}`;
         }
          
         // 大工具结果先写磁盘再返回路径，避免占用上下文
         output = await this.compactSystem.persistLargeOutput(block.id, output);
 
+        const isError = output.startsWith("Error:");
+        this.callbacks.onToolResult?.(block.name, output, isError);
+
         results.push({
           type: "tool_result",
           tool_use_id: block.id,
           content: output,
-          is_error: output.startsWith("Error:"),
+          is_error: isError,
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
