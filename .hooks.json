@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "bash .claude/hooks/session-start.sh",
+        "matcher": "*"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "command": "bash .claude/hooks/log-tool-use.sh",
+        "matcher": "*"
+      },
+      {
+        "command": "bash .claude/hooks/block-dangerous.sh",
+        "matcher": "bash"
+      },
+      {
+        "command": "bash .claude/hooks/inject-file-warning.sh",
+        "matcher": "file"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "command": "bash .claude/hooks/post-tool-summary.sh",
+        "matcher": "*"
+      }
+    ]
+  }
+}

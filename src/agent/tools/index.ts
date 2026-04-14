@@ -1,7 +1,15 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
 import { todoManager, skillsSystem } from "../systems";
+import { MemorySystem } from "../extensions/memorySystem";
 import Anthropic from "@anthropic-ai/sdk";
+
+// 记忆系统实例 — 由 AgentLoop 初始化后注入
+let memorySystemRef: MemorySystem | null = null;
+
+export function setMemorySystem(ms: MemorySystem): void {
+  memorySystemRef = ms;
+}
 
 
 /**
@@ -157,6 +165,43 @@ export const TOOLS = [
       required: ["name"],
     },
   },
+  {
+    name: "save_memory",
+    description: "Save a persistent memory that survives across sessions. Use for: user preferences, confirmed good practices, repeated corrections, non-obvious project facts, external resource pointers. Do NOT use for: code structure derivable from the repo, temporary task state (current branch, this week's PRs), secrets/credentials.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "Short identifier (e.g. prefer_tabs, db_schema)",
+        },
+        description: {
+          type: "string",
+          description: "One-line summary of what this memory captures",
+        },
+        type: {
+          type: "string",
+          enum: ["user", "feedback", "project", "reference"],
+          description: "user=preferences, feedback=corrections or confirmed good practices, project=non-obvious project facts, reference=external resource pointers",
+        },
+        content: {
+          type: "string",
+          description: "Full memory content (multi-line OK). Must be a long-lasting insight, not ephemeral state.",
+        },
+        scope: {
+          type: "string",
+          enum: ["private", "team"],
+          description: "private=only this user/agent, team=shared across the project team. Defaults: user/feedback->private, project/reference->team",
+        },
+        sentiment: {
+          type: "string",
+          enum: ["positive", "negative", "neutral"],
+          description: "positive=confirmed good practice, negative=correction/mistake, neutral=factual. Default: neutral",
+        },
+      },
+      required: ["name", "description", "type", "content"],
+    },
+  },
 ];
 
 /**
@@ -174,6 +219,10 @@ const TOOL_HANDLERS: Record<
   todo: (input) => Promise.resolve(todoManager.update(input.items)),
   compact: () => Promise.resolve("Compacting conversation..."),
   load_skill: (input) => Promise.resolve(skillsSystem.loadSkill(input.name)),
+  save_memory: async (input) => {
+    if (!memorySystemRef) return "Error: Memory system not initialized";
+    return memorySystemRef.saveMemory(input.name, input.description, input.type, input.content, input.scope, input.sentiment);
+  },
 };
 
 /**

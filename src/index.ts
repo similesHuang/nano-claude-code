@@ -19,16 +19,23 @@ class ClaudeCLI {
   private input: InputHandler;
   private permissionMode: PermissionMode = "default";
   private running = false;
+  private agent: AgentLoop | null = null;
 
   constructor() {
     this.input = new InputHandler(this.renderer, this.commands);
 
     registerBuiltinCommands(this.commands, this.renderer, {
       getPermissionMode: () => this.permissionMode,
-      setPermissionMode: (m) => { this.permissionMode = m as PermissionMode; },
+      setPermissionMode: (m) => {
+        this.permissionMode = m as PermissionMode;
+        this.agent?.setPermissionMode(this.permissionMode);
+      },
       permissionModes: PERMISSION_MODES,
       onExit: () => this.exit(),
-      onClear: () => this.renderer.print(chalk.gray("  对话已清空\n")),
+      onClear: () => {
+        this.agent?.clearConversation();
+        this.renderer.print(chalk.gray("  对话已清空\n"));
+      },
     });
   }
 
@@ -77,52 +84,7 @@ class ClaudeCLI {
     this.spinner.start("思考中");
 
     try {
-      const callbacks = {
-        onToolCall: (name: string, toolInput: any) => {
-          this.spinner.stop();
-          if (name === "load_skill") {
-            const skillName = toolInput?.name || "unknown";
-            this.renderer.skillLoad(skillName, true);
-          } else {
-            const summary = this.renderer.formatToolSummary(name, toolInput);
-            this.renderer.toolCall(name, summary);
-          }
-          this.spinner.start("执行中");
-        },
-        onToolResult: (name: string, output: string, isError: boolean) => {
-          this.spinner.stop();
-          this.renderer.toolResult(name, output, isError);
-          this.spinner.start("思考中");
-        },
-        onError: (error: Error) => {
-          this.spinner.stop();
-          this.renderer.error(error.message);
-        },
-        onPermissionDenied: (name: string, reason: string) => {
-          this.spinner.stop();
-          this.renderer.permissionDenied(name, reason);
-          this.spinner.start("思考中");
-        },
-        onPermissionAsk: async (
-          name: string,
-          toolInput: any,
-          reason: string,
-        ): Promise<"y" | "n" | "always"> => {
-          this.spinner.stop();
-          this.renderer.permissionAsk(name, toolInput, reason);
-          this.renderer.permissionPrompt();
-
-          const ch = await this.input.waitForKey(["y", "n", "a"]);
-          const answer = ch === "a" ? "always" : ch === "y" ? "y" : "n";
-          this.renderer.print(answer);
-          this.spinner.start("执行中");
-          return answer;
-        },
-      };
-
-      const config = { ...agentConfig, permissionMode: this.permissionMode };
-      const agent = new AgentLoop(config, callbacks);
-      const response = await agent.run(input);
+      const response = await this.getOrCreateAgent().run(input);
 
       this.spinner.stop();
       this.renderer.response(response);
@@ -132,6 +94,59 @@ class ClaudeCLI {
     }
 
     this.running = false;
+  }
+
+  private getOrCreateAgent(): AgentLoop {
+    if (this.agent) {
+      return this.agent;
+    }
+
+    const callbacks = {
+      onToolCall: (name: string, toolInput: any) => {
+        this.spinner.stop();
+        if (name === "load_skill") {
+          const skillName = toolInput?.name || "unknown";
+          this.renderer.skillLoad(skillName, true);
+        } else {
+          const summary = this.renderer.formatToolSummary(name, toolInput);
+          this.renderer.toolCall(name, summary);
+        }
+        this.spinner.start("执行中");
+      },
+      onToolResult: (name: string, output: string, isError: boolean) => {
+        this.spinner.stop();
+        this.renderer.toolResult(name, output, isError);
+        this.spinner.start("思考中");
+      },
+      onError: (error: Error) => {
+        this.spinner.stop();
+        this.renderer.error(error.message);
+      },
+      onPermissionDenied: (name: string, reason: string) => {
+        this.spinner.stop();
+        this.renderer.permissionDenied(name, reason);
+        this.spinner.start("思考中");
+      },
+      onPermissionAsk: async (
+        name: string,
+        toolInput: any,
+        reason: string,
+      ): Promise<"y" | "n" | "always"> => {
+        this.spinner.stop();
+        this.renderer.permissionAsk(name, toolInput, reason);
+        this.renderer.permissionPrompt();
+
+        const ch = await this.input.waitForKey(["y", "n", "a"]);
+        const answer = ch === "a" ? "always" : ch === "y" ? "y" : "n";
+        this.renderer.print(answer);
+        this.spinner.start("执行中");
+        return answer;
+      },
+    };
+
+    const config = { ...agentConfig, permissionMode: this.permissionMode };
+    this.agent = new AgentLoop(config, callbacks);
+    return this.agent;
   }
 
   private exit() {

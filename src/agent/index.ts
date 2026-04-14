@@ -1,9 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
+import * as path from "path";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
-import { TASK_TOOL, TOOLS, executeTool } from "./tools";
+import { TASK_TOOL, TOOLS, executeTool, setMemorySystem } from "./tools";
 import { todoManager, skillsSystem, CompactSystem } from "./systems";
-import { PermissionManager, HookManager } from "./extensions";
+import { PermissionManager, HookManager, MemorySystem, DreamConsolidator } from "./extensions";
 import { getDataDir } from "../config/paths.js";
+import type { PermissionMode } from "./extensions/permissionManager";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -28,11 +30,12 @@ export class AgentLoop {
   private compactSystem: CompactSystem;
   private permissionManager: PermissionManager;
   private hookManager: HookManager;
+  private memorySystem: MemorySystem;
+  private dreamConsolidator: DreamConsolidator;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
     this.isSubAgent = config.isSubAgent ?? false;
-    this.systemPrompt = this.getDefaultSystemPrompt(this.isSubAgent);
     this.maxTokens = config.maxTokens || 8000;
     this.temperature = config.temperature ?? 0.7;
     this.maxIterations = config.maxIterations || (this.isSubAgent ? 30 : 50);
@@ -47,23 +50,60 @@ export class AgentLoop {
     this.compactSystem = new CompactSystem(getDataDir(), config.compact);
     this.permissionManager = new PermissionManager(config.permissionMode ?? "default");
     this.hookManager = new HookManager();
+    const teamMemoryDir = path.join(process.cwd(), ".memory");
+    const privateMemoryDir = path.join(getDataDir(), "memory", "private");
+    this.memorySystem = new MemorySystem(teamMemoryDir, privateMemoryDir);
+    this.dreamConsolidator = new DreamConsolidator(path.join(process.cwd(), ".memory"));
+    setMemorySystem(this.memorySystem);
+    this.systemPrompt = this.buildSystemPrompt();
 
     // 构建工具列表：子代理不需要 task 工具（避免无限递归）
     this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
   }
 
-  private getDefaultSystemPrompt(isSubAgent: boolean): string {
-    if (isSubAgent) {
+  private buildSystemPrompt(): string {
+    if (this.isSubAgent) {
       return `You are a coding subagent at ${process.cwd()}. Complete the given task efficiently using available tools. Return only a summary of what you accomplished.`;
     }
 
-    return `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
+    let prompt = `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
 
 For complex multi-step tasks, ALWAYS use the todo tool to plan BEFORE acting:
 1. Create a todo list with all steps as "pending"
 2. Mark one step "in_progress", do the work, then mark it "completed"
 3. Repeat until all steps are done
 Never skip the planning phase or mark tasks completed before actually doing them.`;
+
+    // 注入持久化记忆
+    const memorySection = this.memorySystem.buildPromptSection();
+    if (memorySection) {
+      prompt += "\n\n" + memorySection;
+    }
+
+    prompt += `\n\nWhen to save memories with save_memory tool:
+- User states a preference -> type: user, scope: private
+- User corrects you ("don't do X") -> type: feedback, sentiment: negative
+- User confirms a practice works well -> type: feedback, sentiment: positive
+- You learn a non-obvious project fact -> type: project, scope: team
+- You find an external resource pointer -> type: reference, scope: team
+
+Do NOT save:
+- Code structure derivable from the repo (function signatures, file layout)
+- Ephemeral state (current branch, this week's PRs, today's tasks, commit hashes)
+- Secrets or credentials (API keys, passwords, tokens)
+- If content contains ephemeral details, extract the lasting insight first.
+
+When using memories:
+- Treat them as directional hints, not verified truths.
+- Before recommending a path, function, or URL from memory, re-read/verify it first.
+- If user says "ignore memory" or "don't use memories", treat memory as empty for this turn.`;
+
+    if (this.skillsInitialized && skillsSystem.hasSkills()) {
+      const catalog = skillsSystem.describeCatalog();
+      prompt += `\n\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\nIMPORTANT: After loading a skill, if it contains executable commands (e.g. lines starting with "执行命令", or code blocks marked with "exec"), you MUST execute them using the bash tool.\n`;
+    }
+
+    return prompt;
   }
 
   /**
@@ -75,11 +115,21 @@ Never skip the planning phase or mark tasks completed before actually doing them
       this.skillsInitialized = true;
       await this.hookManager.init();
       await this.hookManager.runHooks("SessionStart", { tool_name: "", tool_input: {} });
+      await this.memorySystem.init();
+      // Dream: 递增会话计数，尝试后台整理记忆
+      await this.dreamConsolidator.incrementSession();
+      this.tryDreamConsolidate(); // fire-and-forget
       await skillsSystem.init();
-      if (skillsSystem.hasSkills()) {
-        const catalog = skillsSystem.describeCatalog();
-        this.systemPrompt += `\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\nIMPORTANT: After loading a skill, if it contains executable commands (e.g. lines starting with "执行命令", or code blocks marked with "exec"), you MUST execute them using the bash tool.\n`;
-      }
+    }
+
+    // 边界5: 用户说"忽略记忆"时，本轮按记忆为空处理
+    const suppressPattern = /忽略(之前的?)?(记忆|memory)|ignore\s+memor|don'?t\s+use\s+memor|without\s+memor/i;
+    if (suppressPattern.test(userMessage)) {
+      this.memorySystem.suppressMemories();
+      // 重建 system prompt（此时 buildPromptSection 返回空）
+    } else if (this.memorySystem.isSuppressed()) {
+      // 上一轮被静默，本轮自动恢复
+      this.memorySystem.restoreMemories();
     }
 
     this.messages.push({
@@ -113,6 +163,8 @@ Never skip the planning phase or mark tasks completed before actually doing them
           (messages) => this.summarizeHistory(messages),
         );
       }
+
+      this.systemPrompt = this.buildSystemPrompt();
 
       const response = await this.client.messages.create({
         model: this.model,
@@ -344,6 +396,38 @@ Never skip the planning phase or mark tasks completed before actually doing them
   }
 
   /**
+   * Dream 整理 — fire-and-forget，不阻塞主流程
+   * 通过注入一个轻量 summarize 函数把 LLM 调用委托回来，
+   * DreamConsolidator 自身不持有 client 实例。
+   */
+  private tryDreamConsolidate(): void {
+    const summarize = async (prompt: string): Promise<string> => {
+      const response = await this.client.messages.create({
+        model: this.model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 4000,
+      });
+
+      return response.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
+    };
+
+    // 后台执行，不 await，失败静默
+    this.dreamConsolidator
+      .consolidate(summarize, this.memorySystem)
+      .then((log) => {
+        if (log.length > 0 && log.some((l) => l.includes("Phase"))) {
+          // 整理完成后重新加载记忆到内存
+          this.memorySystem.init().catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
+
+  /**
    * 派发子代理
    */
   private async runSubAgent(prompt: string): Promise<string> {
@@ -416,6 +500,19 @@ Never skip the planning phase or mark tasks completed before actually doing them
 
   clearMessages(): void {
     this.messages = [];
+  }
+
+  clearConversation(): void {
+    this.clearMessages();
+    todoManager.clear();
+    if (this.memorySystem.isSuppressed()) {
+      this.memorySystem.restoreMemories();
+    }
+    this.systemPrompt = this.buildSystemPrompt();
+  }
+
+  setPermissionMode(mode: PermissionMode): void {
+    this.permissionManager.mode = mode;
   }
 
   setMessages(messages: Anthropic.MessageParam[]): void {

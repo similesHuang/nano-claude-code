@@ -13,3 +13,16 @@ export {
   type HookResult,
   type HookDefinition,
 } from "../extensions/hookManager";
+
+export {
+  MemorySystem,
+  DreamConsolidator,
+  MEMORY_TYPES,
+  MEMORY_SCOPES,
+  MEMORY_SENTIMENTS,
+  type MemoryType,
+  type MemoryScope,
+  type MemorySentiment,
+  type MemoryEntry,
+  type ConsolidationAction,
+} from "../extensions/memorySystem";
