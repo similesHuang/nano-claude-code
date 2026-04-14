@@ -29,4 +29,12 @@ export {
   type ConsolidationAction,
 } from "../extensions/memorySystem";
 
+export {
+  ErrorRecovery,
+  chooseRecovery,
+  type RecoveryKind,
+  type RecoveryDecision,
+  type ErrorRecoveryConfig,
+} from "../extensions/errorRecovery";
+
 export { SystemPromptBuilder } from "../extensions/systemPromptBuilder";

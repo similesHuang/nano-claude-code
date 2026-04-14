@@ -1,5 +1,7 @@
 import { runBash } from "./bash";
 import { runRead, runWrite, runEdit } from "./file";
+import { runListFiles } from "./listFiles";
+import { runSearch } from "./search";
 import { todoManager, skillsSystem } from "../systems";
 import { MemorySystem } from "../extensions/memorySystem";
 import Anthropic from "@anthropic-ai/sdk";
@@ -112,6 +114,53 @@ export const TOOLS = [
     },
   },
   {
+    name: "list_files",
+    description: "List the directory structure recursively (without reading file contents). Much faster than reading individual files. Use this first to understand a project's layout.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: {
+          type: "string",
+          description: "The directory to list (default: current directory)",
+        },
+        depth: {
+          type: "integer",
+          description: "Max recursion depth (default: 3). Use larger values for deeper exploration.",
+        },
+        limit: {
+          type: "integer",
+          description: "Max entries to return (default: 500)",
+        },
+      },
+    },
+  },
+  {
+    name: "search",
+    description: "Search for text/regex patterns across project files (like grep -rn). Respects common ignore patterns (node_modules, .git, etc). Use this instead of reading files one by one.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        pattern: {
+          type: "string",
+          description: "Search pattern (string or regex)",
+        },
+        path: {
+          type: "string",
+          description: "Directory to search in (default: current directory)",
+        },
+        include: {
+          type: "string",
+          description: "Comma-separated file extensions to search, e.g. 'ts,js,json'",
+        },
+        max_results: {
+          type: "integer",
+          description: "Maximum number of matches to return (default: 30)",
+        },
+      },
+      required: ["pattern"],
+    },
+  },
+  {
     name: "todo",
     description: "Manage a structured todo list to plan and track multi-step tasks.\n\nWorkflow:\n1. PLAN FIRST: When receiving a complex task, immediately create a todo list with ALL steps as 'pending'.\n2. EXECUTE IN ORDER: Before starting each step, mark it 'in_progress' (only ONE at a time).\n3. MARK DONE: After completing a step, mark it 'completed' immediately, then move to the next.\n\nDo NOT create a todo with items already marked as completed. Always plan first, then execute step by step.",
     input_schema: {
@@ -216,6 +265,8 @@ const TOOL_HANDLERS: Record<
   read_file: (input) => runRead(input.path, input.limit),
   write_file: (input) => runWrite(input.path, input.content),
   edit_file: (input) => runEdit(input.path, input.old_text, input.new_text),
+  list_files: (input) => runListFiles(input.path, input.depth, input.limit),
+  search: (input) => runSearch(input.pattern, input.path, input.include, input.max_results),
   todo: (input) => Promise.resolve(todoManager.update(input.items)),
   compact: () => Promise.resolve("Compacting conversation..."),
   load_skill: (input) => Promise.resolve(skillsSystem.loadSkill(input.name)),

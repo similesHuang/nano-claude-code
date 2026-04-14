@@ -125,7 +125,7 @@ ${chalk.gray("─".repeat(50))}
     for (const key of preferredFields) {
       const value = toolInput[key];
       if (typeof value === "string" && value.trim()) {
-        return value.slice(0, 60);
+        return value;
       }
     }
 

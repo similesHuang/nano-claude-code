@@ -3,7 +3,7 @@ import * as path from "path";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool, setMemorySystem } from "./tools";
 import { todoManager, skillsSystem, CompactSystem } from "./systems";
-import { PermissionManager, HookManager, MemorySystem, DreamConsolidator } from "./extensions";
+import { PermissionManager, HookManager, MemorySystem, DreamConsolidator, ErrorRecovery } from "./extensions";
 import { SystemPromptBuilder } from "./extensions/systemPromptBuilder";
 import { getDataDir } from "../config/paths.js";
 import type { PermissionMode } from "./extensions/permissionManager";
@@ -34,6 +34,7 @@ export class AgentLoop {
   private memorySystem: MemorySystem;
   private dreamConsolidator: DreamConsolidator;
   private promptBuilder: SystemPromptBuilder;
+  private errorRecovery: ErrorRecovery;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -61,6 +62,7 @@ export class AgentLoop {
       memorySystem: this.memorySystem,
       skillsSystem,
     });
+    this.errorRecovery = new ErrorRecovery();
     this.systemPrompt = this.isSubAgent
       ? this.promptBuilder.buildForSubAgent()
       : this.promptBuilder.build();
@@ -132,14 +134,29 @@ export class AgentLoop {
         );
       }
 
-      const response = await this.client.messages.create({
-        model: this.model,
-        system: this.systemPrompt,
-        messages: this.messages,
-        tools: this.tools,
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-      });
+      const response = await this.errorRecovery.callWithRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            system: this.systemPrompt,
+            messages: this.messages,
+            tools: this.tools,
+            max_tokens: this.maxTokens,
+            temperature: this.temperature,
+          }),
+        this.messages,
+        async (msgs) =>
+          this.compactSystem.compactHistory(msgs, (m) => this.summarizeHistory(m)),
+      );
+
+      if (!response) {
+        break;
+      }
+
+      // max_tokens → 注入续写消息后重新进入循环
+      if (this.errorRecovery.handleMaxTokens(response, this.messages)) {
+        continue;
+      }
 
       this.messages.push({
         role: "assistant",
