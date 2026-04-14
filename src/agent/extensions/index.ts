@@ -1,3 +1,5 @@
+// 系统加固层：权限管控、生命周期 Hook、记忆持久化、系统提示词构建
+
 export {
   PermissionManager,
   PERMISSION_MODES,
@@ -26,3 +28,5 @@ export {
   type MemoryEntry,
   type ConsolidationAction,
 } from "../extensions/memorySystem";
+
+export { SystemPromptBuilder } from "../extensions/systemPromptBuilder";

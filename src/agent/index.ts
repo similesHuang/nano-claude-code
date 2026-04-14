@@ -4,6 +4,7 @@ import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
 import { TASK_TOOL, TOOLS, executeTool, setMemorySystem } from "./tools";
 import { todoManager, skillsSystem, CompactSystem } from "./systems";
 import { PermissionManager, HookManager, MemorySystem, DreamConsolidator } from "./extensions";
+import { SystemPromptBuilder } from "./extensions/systemPromptBuilder";
 import { getDataDir } from "../config/paths.js";
 import type { PermissionMode } from "./extensions/permissionManager";
 
@@ -32,6 +33,7 @@ export class AgentLoop {
   private hookManager: HookManager;
   private memorySystem: MemorySystem;
   private dreamConsolidator: DreamConsolidator;
+  private promptBuilder: SystemPromptBuilder;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -53,57 +55,18 @@ export class AgentLoop {
     const teamMemoryDir = path.join(process.cwd(), ".memory");
     const privateMemoryDir = path.join(getDataDir(), "memory", "private");
     this.memorySystem = new MemorySystem(teamMemoryDir, privateMemoryDir);
-    this.dreamConsolidator = new DreamConsolidator(path.join(process.cwd(), ".memory"));
+    this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, privateMemoryDir);
     setMemorySystem(this.memorySystem);
-    this.systemPrompt = this.buildSystemPrompt();
+    this.promptBuilder = new SystemPromptBuilder({
+      memorySystem: this.memorySystem,
+      skillsSystem,
+    });
+    this.systemPrompt = this.isSubAgent
+      ? this.promptBuilder.buildForSubAgent()
+      : this.promptBuilder.build();
 
     // 构建工具列表：子代理不需要 task 工具（避免无限递归）
     this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
-  }
-
-  private buildSystemPrompt(): string {
-    if (this.isSubAgent) {
-      return `You are a coding subagent at ${process.cwd()}. Complete the given task efficiently using available tools. Return only a summary of what you accomplished.`;
-    }
-
-    let prompt = `You are a coding agent at ${process.cwd()}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
-
-For complex multi-step tasks, ALWAYS use the todo tool to plan BEFORE acting:
-1. Create a todo list with all steps as "pending"
-2. Mark one step "in_progress", do the work, then mark it "completed"
-3. Repeat until all steps are done
-Never skip the planning phase or mark tasks completed before actually doing them.`;
-
-    // 注入持久化记忆
-    const memorySection = this.memorySystem.buildPromptSection();
-    if (memorySection) {
-      prompt += "\n\n" + memorySection;
-    }
-
-    prompt += `\n\nWhen to save memories with save_memory tool:
-- User states a preference -> type: user, scope: private
-- User corrects you ("don't do X") -> type: feedback, sentiment: negative
-- User confirms a practice works well -> type: feedback, sentiment: positive
-- You learn a non-obvious project fact -> type: project, scope: team
-- You find an external resource pointer -> type: reference, scope: team
-
-Do NOT save:
-- Code structure derivable from the repo (function signatures, file layout)
-- Ephemeral state (current branch, this week's PRs, today's tasks, commit hashes)
-- Secrets or credentials (API keys, passwords, tokens)
-- If content contains ephemeral details, extract the lasting insight first.
-
-When using memories:
-- Treat them as directional hints, not verified truths.
-- Before recommending a path, function, or URL from memory, re-read/verify it first.
-- If user says "ignore memory" or "don't use memories", treat memory as empty for this turn.`;
-
-    if (this.skillsInitialized && skillsSystem.hasSkills()) {
-      const catalog = skillsSystem.describeCatalog();
-      prompt += `\n\nUse load_skill when a task needs specialized instructions before you act.\nSkills available:\n${catalog}\nIMPORTANT: After loading a skill, if it contains executable commands (e.g. lines starting with "执行命令", or code blocks marked with "exec"), you MUST execute them using the bash tool.\n`;
-    }
-
-    return prompt;
   }
 
   /**
@@ -120,6 +83,7 @@ When using memories:
       await this.dreamConsolidator.incrementSession();
       this.tryDreamConsolidate(); // fire-and-forget
       await skillsSystem.init();
+      this.promptBuilder.markSkillsReady();
     }
 
     // 边界5: 用户说"忽略记忆"时，本轮按记忆为空处理
@@ -131,6 +95,10 @@ When using memories:
       // 上一轮被静默，本轮自动恢复
       this.memorySystem.restoreMemories();
     }
+
+    this.systemPrompt = this.isSubAgent
+      ? this.promptBuilder.buildForSubAgent()
+      : this.promptBuilder.build();
 
     this.messages.push({
       role: "user",
@@ -163,8 +131,6 @@ When using memories:
           (messages) => this.summarizeHistory(messages),
         );
       }
-
-      this.systemPrompt = this.buildSystemPrompt();
 
       const response = await this.client.messages.create({
         model: this.model,
@@ -494,28 +460,30 @@ When using memories:
     return "";
   }
 
-  getMessages(): Anthropic.MessageParam[] {
-    return [...this.messages];
-  }
-
-  clearMessages(): void {
-    this.messages = [];
-  }
-
   clearConversation(): void {
-    this.clearMessages();
+    this.messages = [];
     todoManager.clear();
     if (this.memorySystem.isSuppressed()) {
       this.memorySystem.restoreMemories();
     }
-    this.systemPrompt = this.buildSystemPrompt();
+    this.systemPrompt = this.isSubAgent
+      ? this.promptBuilder.buildForSubAgent()
+      : this.promptBuilder.build();
   }
 
   setPermissionMode(mode: PermissionMode): void {
     this.permissionManager.mode = mode;
   }
 
-  setMessages(messages: Anthropic.MessageParam[]): void {
-    this.messages = [...messages];
+  async compactConversation(focus?: string): Promise<string> {
+    if (this.messages.length === 0) {
+      return "No conversation to compact.";
+    }
+    this.messages = await this.compactSystem.compactHistory(
+      this.messages,
+      (messages) => this.summarizeHistory(messages),
+      focus,
+    );
+    return "Conversation compacted.";
   }
 }

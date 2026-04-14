@@ -69,6 +69,7 @@ export function registerBuiltinCommands(
     permissionModes: readonly string[];
     onExit: () => void;
     onClear: () => void;
+    onCompact: (focus?: string) => Promise<void>;
   },
 ) {
   registry.register({
@@ -108,6 +109,15 @@ export function registerBuiltinCommands(
     description: "清空当前对话",
     handler: () => {
       context.onClear();
+      return true;
+    },
+  });
+
+  registry.register({
+    name: "/compact",
+    description: "压缩当前对话上下文 (可选: /compact <focus>)",
+    handler: (args) => {
+      context.onCompact(args || undefined);
       return true;
     },
   });

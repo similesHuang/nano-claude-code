@@ -448,7 +448,8 @@ export class DreamConsolidator {
   static readonly MIN_MEMORY_COUNT = 5;           // 至少 5 条记忆才值得整理
   static readonly LOCK_STALE_SECONDS = 3600;      // 锁超过 1h 视为过期
 
-  private memoryDir: string;
+  private memoryDirs: string[];
+  private primaryDir: string;
   private lockFile: string;
   private enabled = true;
   private mode: "default" | "plan" = "default";
@@ -457,10 +458,17 @@ export class DreamConsolidator {
   private sessionCount = 0;
   private stateFile: string;
 
-  constructor(memoryDir: string) {
-    this.memoryDir = memoryDir;
-    this.lockFile = path.join(this.memoryDir, ".dream_lock");
-    this.stateFile = path.join(this.memoryDir, ".dream_state.json");
+  constructor(memoryDir: string, ...extraDirs: string[]) {
+    this.primaryDir = memoryDir;
+    // 去重：合并主目录和额外目录
+    const seen = new Set<string>();
+    this.memoryDirs = [memoryDir, ...extraDirs].filter((d) => {
+      if (seen.has(d)) return false;
+      seen.add(d);
+      return true;
+    });
+    this.lockFile = path.join(this.primaryDir, ".dream_lock");
+    this.stateFile = path.join(this.primaryDir, ".dream_state.json");
   }
 
   /**
@@ -481,7 +489,7 @@ export class DreamConsolidator {
    * 持久化整理状态
    */
   private async saveState(): Promise<void> {
-    await fs.mkdir(this.memoryDir, { recursive: true });
+    await fs.mkdir(this.primaryDir, { recursive: true });
     await fs.writeFile(
       this.stateFile,
       JSON.stringify({
@@ -521,17 +529,19 @@ export class DreamConsolidator {
       return { canRun: false, reason: "Gate 1: consolidation is disabled" };
     }
 
-    // Gate 2: 记忆目录是否存在且有文件
-    let memoryFiles: string[];
-    try {
-      const entries = await fs.readdir(this.memoryDir);
-      memoryFiles = entries.filter((f) => f.endsWith(".md") && f !== "MEMORY.md");
-    } catch {
-      return { canRun: false, reason: "Gate 2: memory directory does not exist" };
+    // Gate 2: 所有记忆目录中是否有文件
+    let totalMemoryFiles = 0;
+    for (const dir of this.memoryDirs) {
+      try {
+        const entries = await fs.readdir(dir);
+        totalMemoryFiles += entries.filter((f) => f.endsWith(".md") && f !== "MEMORY.md").length;
+      } catch {
+        // 目录不存在，跳过
+      }
     }
 
-    if (memoryFiles.length === 0) {
-      return { canRun: false, reason: "Gate 2: no memory files found" };
+    if (totalMemoryFiles === 0) {
+      return { canRun: false, reason: "Gate 2: no memory files found in any directory" };
     }
 
     // Gate 3: plan 模式不允许整理（只在活跃模式下整理）
@@ -636,31 +646,42 @@ export class DreamConsolidator {
   // ========================
 
   private async readIndexOrBuild(memorySystem: MemorySystem): Promise<string> {
-    try {
-      return await fs.readFile(path.join(this.memoryDir, "MEMORY.md"), "utf-8");
-    } catch {
-      return memorySystem.listMemories();
+    // 尝试从所有目录读取 MEMORY.md 并合并
+    const parts: string[] = [];
+    for (const dir of this.memoryDirs) {
+      try {
+        const content = await fs.readFile(path.join(dir, "MEMORY.md"), "utf-8");
+        parts.push(content.trim());
+      } catch {
+        // 目录不存在或文件不存在，跳过
+      }
     }
+    return parts.length > 0 ? parts.join("\n") : memorySystem.listMemories();
   }
 
   private async gatherMemories(): Promise<Array<{ fileName: string; raw: string }>> {
     const results: Array<{ fileName: string; raw: string }> = [];
+    const seen = new Set<string>();
 
-    let entries: string[];
-    try {
-      entries = await fs.readdir(this.memoryDir);
-    } catch {
-      return results;
-    }
-
-    for (const fileName of entries.sort()) {
-      if (!fileName.endsWith(".md") || fileName === "MEMORY.md") continue;
-
+    for (const dir of this.memoryDirs) {
+      let entries: string[];
       try {
-        const raw = await fs.readFile(path.join(this.memoryDir, fileName), "utf-8");
-        results.push({ fileName, raw });
+        entries = await fs.readdir(dir);
       } catch {
-        // 跳过不可读文件
+        continue;
+      }
+
+      for (const fileName of entries.sort()) {
+        if (!fileName.endsWith(".md") || fileName === "MEMORY.md") continue;
+        if (seen.has(fileName)) continue;
+        seen.add(fileName);
+
+        try {
+          const raw = await fs.readFile(path.join(dir, fileName), "utf-8");
+          results.push({ fileName, raw });
+        } catch {
+          // 跳过不可读文件
+        }
       }
     }
 
@@ -803,7 +824,7 @@ export class DreamConsolidator {
 
     // 写入新锁
     try {
-      await fs.mkdir(this.memoryDir, { recursive: true });
+      await fs.mkdir(this.primaryDir, { recursive: true });
       await fs.writeFile(this.lockFile, `${process.pid}:${now}`, "utf-8");
       return true;
     } catch {

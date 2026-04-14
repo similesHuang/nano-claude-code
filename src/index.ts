@@ -36,6 +36,25 @@ class ClaudeCLI {
         this.agent?.clearConversation();
         this.renderer.print(chalk.gray("  对话已清空\n"));
       },
+      onCompact: async (focus?: string) => {
+        const agent = this.agent;
+        if (!agent) {
+          this.renderer.print(chalk.gray("  没有活跃的对话\n"));
+          return;
+        }
+        this.spinner.start("压缩中");
+        try {
+          await agent.compactConversation(focus);
+          this.spinner.stop();
+          const msg = focus
+            ? `  对话已压缩 (focus: ${focus})\n`
+            : "  对话已压缩\n";
+          this.renderer.print(chalk.gray(msg));
+        } catch {
+          this.spinner.stop();
+          this.renderer.error("压缩失败");
+        }
+      },
     });
   }
 
@@ -46,8 +65,6 @@ class ClaudeCLI {
     });
 
     this.renderer.banner();
-    // 启动时显示帮助
-    this.commands.tryExecute("/help");
     await this.repl();
   }
 

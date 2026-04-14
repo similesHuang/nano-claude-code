@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 import type { AgentConfig } from '../agent/types';
 
 function getEnvNumber(name: string, fallback: number): number {

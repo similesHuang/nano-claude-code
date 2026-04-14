@@ -19,10 +19,10 @@ export class Renderer {
   banner() {
     this.print(`
 ${chalk.cyan("    _")}
-${chalk.cyan('   (_)___ ____ ____   ____   __  ______  ____')}
-${chalk.cyan('   / / __ \\\\_  _ \\\\')}${chalk.blue('_  _ ')}${chalk.cyan('\\\\  \\ / /\\ \\ / / / ___/ / __ \\')}
-${chalk.cyan('  / / /_/ // / // /_\\ \\/  \\ V / / /__  / /_/ /')}
-${chalk.cyan(' / /\\____//_/ /_/\\____/\\____/ \\_/ \\___/  \\____/')}
+${chalk.cyan("   (_)___ ____ ____   ____   __  ______  ____")}
+${chalk.cyan("   / / __ \\\\_  _ \\\\")}${chalk.blue("_  _ ")}${chalk.cyan("\\\\  \\ / /\\ \\ / / / ___/ / __ \\")}
+${chalk.cyan("  / / /_/ // / // /_\\ \\/  \\ V / / /__  / /_/ /")}
+${chalk.cyan(" / /\\____//_/ /_/\\____/\\____/ \\_/ \\___/  \\____/")}
 
 ${chalk.gray("─".repeat(50))}
 ${chalk.blue("nano-claude-code")} ${chalk.dim("v1.0.0")}
@@ -32,7 +32,9 @@ ${chalk.gray("─".repeat(50))}
 
   response(text: string) {
     this.print(
-      chalk.gray("\n  ┌─") + chalk.green(" Claude ") + chalk.gray("─".repeat(32)),
+      chalk.gray("\n  ┌─") +
+        chalk.green(" Claude ") +
+        chalk.gray("─".repeat(32)),
     );
     for (const line of text.split("\n")) {
       this.print(chalk.gray("  │ ") + line);
@@ -45,12 +47,14 @@ ${chalk.gray("─".repeat(50))}
       `\n  ${chalk.magenta("⚡")} ${chalk.blue(toolName)} ${chalk.dim(summary)}`,
     );
   }
-  
+
   toolResult(toolName: string, output: string, isError: boolean) {
     if (isError) {
       // 错误：显示首行错误信息
       const firstLine = output.split("\n")[0].slice(0, 80);
-      this.print(`  ${chalk.dim("⎿  ")}${chalk.red("✗")} ${chalk.red(firstLine)}`);
+      this.print(
+        `  ${chalk.dim("⎿  ")}${chalk.red("✗")} ${chalk.red(firstLine)}`,
+      );
     } else {
       // 成功：只显示对勾
       this.print(`  ${chalk.dim("⎿  ")}${chalk.green("✔")}`);
@@ -62,13 +66,9 @@ ${chalk.gray("─".repeat(50))}
       `\n  ${chalk.cyan("⏺")} ${chalk.cyan("Skill")}${chalk.dim("(")}${chalk.cyan(skillName)}${chalk.dim(")")}`,
     );
     if (success) {
-      this.print(
-        `  ${chalk.dim("⎿  ")}${chalk.green("Successfully loaded")}`,
-      );
+      this.print(`  ${chalk.dim("⎿  ")}${chalk.green("Successfully loaded")}`);
     } else {
-      this.print(
-        `  ${chalk.dim("⎿  ")}${chalk.red("Failed to load")}`,
-      );
+      this.print(`  ${chalk.dim("⎿  ")}${chalk.red("Failed to load")}`);
     }
   }
 
@@ -112,8 +112,14 @@ ${chalk.gray("─".repeat(50))}
     if (!toolInput || typeof toolInput !== "object") return "";
 
     const preferredFields = [
-      "command", "path", "filePath", "description",
-      "prompt", "query", "name", "id",
+      "command",
+      "path",
+      "filePath",
+      "description",
+      "prompt",
+      "query",
+      "name",
+      "id",
     ] as const;
 
     for (const key of preferredFields) {
@@ -125,19 +131,25 @@ ${chalk.gray("─".repeat(50))}
 
     if (toolName === "todo" && Array.isArray(toolInput.items)) {
       const markers: Record<string, string> = {
-        pending: "🕘", in_progress: "🔄", completed: "✅",
-        "not-started": "🕘", "in-progress": "🔄",
+        pending: "🕘",
+        in_progress: "🔄",
+        completed: "✅",
+        "not-started": "🕘",
+        "in-progress": "🔄",
       };
       const preview = toolInput.items
         .slice(0, 6)
         .map((item: any, i: number) => {
           const status = String(item?.status || "").toLowerCase();
           const marker = markers[status] || "❔";
-          const text = String(item?.text || item?.title || item?.task || "").trim();
+          const text = String(
+            item?.text || item?.title || item?.task || "",
+          ).trim();
           return `${marker}${text ? text.slice(0, 16) : `item${i + 1}`}`;
         })
         .join(" ");
-      const extra = toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : "";
+      const extra =
+        toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : "";
       return preview + extra;
     }
 
@@ -187,7 +199,8 @@ ${chalk.gray("─".repeat(50))}
       process.stdout.write(`\x1b[${matches.length}A`);
     }
     // 光标定位到输入行末尾
-    const col = prompt.replace(/\x1b\[[0-9;]*m/g, "").length + inputLine.length + 1;
+    const col =
+      prompt.replace(/\x1b\[[0-9;]*m/g, "").length + inputLine.length + 1;
     process.stdout.write(`\r\x1b[${col}C`);
   }
 
@@ -196,11 +209,7 @@ ${chalk.gray("─".repeat(50))}
    */
   clearHints(lineCount: number) {
     if (lineCount <= 0) return;
-    // 移动到菜单区域并清除
-    for (let i = 0; i < lineCount; i++) {
-      process.stdout.write(`\n\x1b[2K`);
-    }
-    // 回到原位
-    process.stdout.write(`\x1b[${lineCount}A`);
+    // 移到下一行，擦除从光标到屏幕底部的所有内容，再回到原位
+    process.stdout.write("\n\x1b[J\x1b[A");
   }
 }
