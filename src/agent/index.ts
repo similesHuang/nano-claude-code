@@ -1,12 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
-import * as path from "path";
-import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types";
-import { TASK_TOOL, TOOLS, executeTool, setMemorySystem } from "./tools";
-import { todoManager, skillsSystem, CompactSystem } from "./systems";
-import { PermissionManager, HookManager, MemorySystem, DreamConsolidator, ErrorRecovery } from "./extensions";
-import { SystemPromptBuilder } from "./extensions/systemPromptBuilder";
-import { getDataDir } from "../config/paths.js";
-import type { PermissionMode } from "./extensions/permissionManager";
+import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.js";
+import { TASK_TOOL, TOOLS, ToolRegistry } from "./tools/index.js";
+import { TodoManager, SkillsSystem, CompactSystem } from "./systems/index.js";
+import { PermissionManager, HookManager, MemorySystem, DreamConsolidator, ErrorRecovery } from "./extensions/index.js";
+import { SystemPromptBuilder } from "./extensions/systemPromptBuilder.js";
+import { PATHS } from "../config/paths.js";
+import type { PermissionMode } from "./extensions/permissionManager.js";
+import { ToolPipeline } from "./toolPipeline.js";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -28,6 +28,10 @@ export class AgentLoop {
   private tools: Anthropic.Tool[];
   private readonly NAG_THRESHOLD: number = 3;
   private skillsInitialized: boolean = false;
+  private currentStream: any = null;
+  private aborted = false;
+
+  // ── 子系统（实例级，非全局单例） ──
   private compactSystem: CompactSystem;
   private permissionManager: PermissionManager;
   private hookManager: HookManager;
@@ -35,6 +39,10 @@ export class AgentLoop {
   private dreamConsolidator: DreamConsolidator;
   private promptBuilder: SystemPromptBuilder;
   private errorRecovery: ErrorRecovery;
+  private todoManager: TodoManager;
+  private skillsSystem: SkillsSystem;
+  private toolRegistry: ToolRegistry;
+  private toolPipeline: ToolPipeline;
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
@@ -50,17 +58,37 @@ export class AgentLoop {
     if (config.baseUrl) clientConfig.baseURL = config.baseUrl;
 
     this.client = new Anthropic(clientConfig);
-    this.compactSystem = new CompactSystem(getDataDir(), config.compact);
+
+    // ── 子系统初始化（全部实例级所有权） ──
+    this.compactSystem = new CompactSystem(PATHS.dataDir, config.compact);
     this.permissionManager = new PermissionManager(config.permissionMode ?? "default");
     this.hookManager = new HookManager();
-    const teamMemoryDir = path.join(process.cwd(), ".memory");
-    const privateMemoryDir = path.join(getDataDir(), "memory", "private");
-    this.memorySystem = new MemorySystem(teamMemoryDir, privateMemoryDir);
-    this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, privateMemoryDir);
-    setMemorySystem(this.memorySystem);
+
+    const teamMemoryDir = PATHS.teamMemory(process.cwd());
+    this.memorySystem = new MemorySystem(teamMemoryDir, PATHS.privateMemory);
+    this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, PATHS.privateMemory);
+
+    this.todoManager = new TodoManager();
+    this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
+
+    this.toolRegistry = new ToolRegistry({
+      todoManager: this.todoManager,
+      skillsSystem: this.skillsSystem,
+      memorySystem: this.memorySystem,
+    });
+
+    this.toolPipeline = new ToolPipeline(
+      this.toolRegistry,
+      this.permissionManager,
+      this.hookManager,
+      this.compactSystem,
+      this.todoManager,
+      this.callbacks,
+    );
+
     this.promptBuilder = new SystemPromptBuilder({
       memorySystem: this.memorySystem,
-      skillsSystem,
+      skillsSystem: this.skillsSystem,
     });
     this.errorRecovery = new ErrorRecovery();
     this.systemPrompt = this.isSubAgent
@@ -75,6 +103,8 @@ export class AgentLoop {
    * 运行 agent loop
    */
   async run(userMessage: string): Promise<string> {
+    this.aborted = false;
+
     // 首次运行时初始化 hook 系统和技能系统
     if (!this.isSubAgent && !this.skillsInitialized) {
       this.skillsInitialized = true;
@@ -84,7 +114,7 @@ export class AgentLoop {
       // Dream: 递增会话计数，尝试后台整理记忆
       await this.dreamConsolidator.incrementSession();
       this.tryDreamConsolidate(); // fire-and-forget
-      await skillsSystem.init();
+      await this.skillsSystem.init();
       this.promptBuilder.markSkillsReady();
     }
 
@@ -92,9 +122,7 @@ export class AgentLoop {
     const suppressPattern = /忽略(之前的?)?(记忆|memory)|ignore\s+memor|don'?t\s+use\s+memor|without\s+memor/i;
     if (suppressPattern.test(userMessage)) {
       this.memorySystem.suppressMemories();
-      // 重建 system prompt（此时 buildPromptSection 返回空）
     } else if (this.memorySystem.isSuppressed()) {
-      // 上一轮被静默，本轮自动恢复
       this.memorySystem.restoreMemories();
     }
 
@@ -116,9 +144,10 @@ export class AgentLoop {
     }
   }
 
-  /**
-   * 核心循环逻辑
-   */
+  // ================================================================
+  // 核心循环
+  // ================================================================
+
   private async agentLoop(): Promise<void> {
     let iteration = 0;
 
@@ -135,21 +164,25 @@ export class AgentLoop {
       }
 
       const response = await this.errorRecovery.callWithRetry(
-        () =>
-          this.client.messages.create({
+        () => {
+          const stream = this.client.messages.stream({
             model: this.model,
             system: this.systemPrompt,
             messages: this.messages,
             tools: this.tools,
             max_tokens: this.maxTokens,
             temperature: this.temperature,
-          }),
+          });
+          this.currentStream = stream;
+          return stream.finalMessage() as Promise<Anthropic.Message>;
+        },
         this.messages,
         async (msgs) =>
           this.compactSystem.compactHistory(msgs, (m) => this.summarizeHistory(m)),
       );
+      this.currentStream = null;
 
-      if (!response) {
+      if (this.aborted || !response) {
         break;
       }
 
@@ -168,11 +201,15 @@ export class AgentLoop {
       }
 
       try {
-        const { results: toolResults, usedTodo, manualCompact, compactFocus } = await this.executeTools(response.content);
+        const { results, usedTodo, manualCompact, compactFocus } =
+          await this.toolPipeline.executeAll(
+            response.content,
+            (prompt) => this.runSubAgent(prompt),
+          );
 
         this.messages.push({
           role: "user",
-          content: toolResults,
+          content: results,
         });
 
         if (manualCompact) {
@@ -187,17 +224,17 @@ export class AgentLoop {
         // todo nag 只在主代理中生效
         if (!this.isSubAgent) {
           if (usedTodo) {
-            todoManager.resetNag();
+            this.todoManager.resetNag();
           } else {
-            todoManager.incrementRound();
+            this.todoManager.incrementRound();
           }
 
-          if (todoManager.shouldNag(this.NAG_THRESHOLD)) {
+          if (this.todoManager.shouldNag(this.NAG_THRESHOLD)) {
             this.messages.push({
               role: "user",
               content: "<reminder>Update your todos.</reminder>",
             });
-            todoManager.resetNag();
+            this.todoManager.resetNag();
           }
         }
       } catch (error) {
@@ -208,144 +245,6 @@ export class AgentLoop {
         });
       }
     }
-  }
-
-  /**
-   * 执行所有工具调用
-   */
-  private async executeTools(
-    content: Array<Anthropic.ContentBlock>,
-  ): Promise<{ results: ToolExecutionResult[]; usedTodo: boolean; manualCompact: boolean; compactFocus?: string }> {
-    const results: ToolExecutionResult[] = [];
-    let usedTodo = false;
-    let manualCompact = false;
-    let compactFocus: string | undefined;
-
-    for (const block of content) {
-      if (block.type !== "tool_use") continue;
-
-      if (todoManager.isTodoTool(block.name)) {
-        usedTodo = true;
-      }
-
-      if (block.name === "compact") {
-        manualCompact = true;
-        const focus = (block.input as { focus?: string })?.focus;
-        if (typeof focus === "string" && focus.trim()) {
-          compactFocus = focus;
-        }
-      }
-
-      if (
-        (block.name === "read_file" || block.name === "write_file" || block.name === "edit_file") &&
-        typeof (block.input as { path?: string })?.path === "string"
-      ) {
-        this.compactSystem.trackRecentFile((block.input as { path: string }).path);
-      }
-
-      try {
-        let output: string;
-        let toolInput = (block.input as Record<string, any>) ?? {};
-
-        // -- PreToolUse hooks --
-        const hookCtx = { tool_name: block.name, tool_input: { ...toolInput } };
-        const preHook = await this.hookManager.runHooks("PreToolUse", hookCtx);
-
-        if (preHook.blocked) {
-          output = `Tool blocked by hook: ${preHook.blockReason ?? "Blocked by PreToolUse hook"}`;
-          // 注入 hook 消息
-          for (const msg of preHook.messages) {
-            results.push({ type: "tool_result", tool_use_id: block.id, content: `[Hook]: ${msg}` });
-          }
-          results.push({ type: "tool_result", tool_use_id: block.id, content: output, is_error: true });
-          continue;
-        }
-
-        // hook 可能修改了 tool_input
-        if (preHook.updatedInput) {
-          toolInput = preHook.updatedInput as Record<string, any>;
-        }
-
-        // -- 权限管线 --
-        const decision = this.permissionManager.check(block.name, toolInput);
-
-        if (decision.behavior === "deny") {
-          // 直接拒绝，让 LLM 知道
-          this.callbacks.onPermissionDenied?.(block.name, decision.reason);
-          output = `Permission denied: ${decision.reason}`;
-        } else if (decision.behavior === "ask") {
-          // 询问用户
-          const answer = await this.callbacks.onPermissionAsk?.(
-            block.name,
-            toolInput,
-            decision.reason,
-          );
-
-          if (answer === "always") {
-            this.permissionManager.addAlwaysAllow(block.name);
-            output = await this.executeSingleTool(block.name, toolInput);
-          } else if (answer === "y") {
-            this.permissionManager.recordApproval();
-            output = await this.executeSingleTool(block.name, toolInput);
-          } else {
-            // 用户拒绝 or 没有注册回调 → 默认拒绝
-            const circuitBreak = this.permissionManager.recordDenial();
-            output = `Permission denied by user for ${block.name}`;
-            if (circuitBreak) {
-              output += " (连续多次拒绝，建议切换到 plan 模式)";
-            }
-          }
-        } else {
-          // allow
-          output = await this.executeSingleTool(block.name, toolInput);
-        }
-
-        // -- PostToolUse hooks --
-        const postCtx = { tool_name: block.name, tool_input: toolInput, tool_output: output };
-        const postHook = await this.hookManager.runHooks("PostToolUse", postCtx);
-        for (const msg of postHook.messages) {
-          output += `\n[Hook note]: ${msg}`;
-        }
-         
-        // 大工具结果先写磁盘再返回路径，避免占用上下文
-        output = await this.compactSystem.persistLargeOutput(block.id, output);
-
-        const isError = output.startsWith("Error:");
-        this.callbacks.onToolResult?.(block.name, output, isError);
-
-        results.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: output,
-          is_error: isError,
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        results.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: `Error: ${errorMessage}`,
-          is_error: true,
-        });
-      }
-    }
-
-    return { results, usedTodo, manualCompact, compactFocus };
-  }
-
-  /**
-   * 执行单个工具调用（权限检查已通过后调用）
-   */
-  private async executeSingleTool(name: string, input: any): Promise<string> {
-    this.callbacks.onToolCall?.(name, input);
-
-    if (name === "task") {
-      const { prompt } = input as { prompt: string; description?: string };
-      return this.runSubAgent(prompt);
-    }
-
-    return executeTool(name, input);
   }
 
   private async summarizeHistory(messages: Anthropic.MessageParam[]): Promise<string> {
@@ -380,8 +279,6 @@ export class AgentLoop {
 
   /**
    * Dream 整理 — fire-and-forget，不阻塞主流程
-   * 通过注入一个轻量 summarize 函数把 LLM 调用委托回来，
-   * DreamConsolidator 自身不持有 client 实例。
    */
   private tryDreamConsolidate(): void {
     const summarize = async (prompt: string): Promise<string> => {
@@ -398,12 +295,10 @@ export class AgentLoop {
         .trim();
     };
 
-    // 后台执行，不 await，失败静默
     this.dreamConsolidator
       .consolidate(summarize, this.memorySystem)
       .then((log) => {
         if (log.length > 0 && log.some((l) => l.includes("Phase"))) {
-          // 整理完成后重新加载记忆到内存
           this.memorySystem.init().catch(() => {});
         }
       })
@@ -411,7 +306,7 @@ export class AgentLoop {
   }
 
   /**
-   * 派发子代理
+   * 派发子代理 — 独立实例，不共享 todoManager/skillsSystem/memory
    */
   private async runSubAgent(prompt: string): Promise<string> {
     const subAgent = new AgentLoop(
@@ -427,9 +322,6 @@ export class AgentLoop {
     return subAgent.run(prompt);
   }
 
-  /**
-   * 为所有 tool_use 创建错误响应
-   */
   private createErrorToolResults(
     content: Array<Anthropic.ContentBlock>,
     error: unknown,
@@ -451,9 +343,6 @@ export class AgentLoop {
     return results;
   }
 
-  /**
-   * 提取最终响应（文本部分）
-   */
   private extractFinalResponse(): string {
     const lastMessage = this.messages[this.messages.length - 1];
 
@@ -477,9 +366,22 @@ export class AgentLoop {
     return "";
   }
 
+  // ================================================================
+  // 公共 API（供 CLI 调用）
+  // ================================================================
+
+  abort(): void {
+    this.aborted = true;
+    this.currentStream?.abort();
+  }
+
+  get isAborted(): boolean {
+    return this.aborted;
+  }
+
   clearConversation(): void {
     this.messages = [];
-    todoManager.clear();
+    this.todoManager.clear();
     if (this.memorySystem.isSuppressed()) {
       this.memorySystem.restoreMemories();
     }

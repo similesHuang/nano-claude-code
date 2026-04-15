@@ -133,6 +133,3 @@ export class TodoManager {
     return toolName === "todo";
   }
 }
-
-// 全局单例实例
-export const todoManager = new TodoManager();

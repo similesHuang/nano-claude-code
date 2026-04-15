@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { readFileSync } from "fs";
 import * as path from "path";
 import * as os from "os";
 import type { MemorySystem } from "./memorySystem";
@@ -141,14 +141,14 @@ IMPORTANT: After loading a skill, if it contains executable commands (e.g. lines
 
     // 用户全局
     const userClaudeMd = path.join(os.homedir(), ".claude", "CLAUDE.md");
-    const userContent = this.readFileSync(userClaudeMd);
+    const userContent = this.tryReadFile(userClaudeMd);
     if (userContent) {
       sources.push({ label: "user global (~/.claude/CLAUDE.md)", content: userContent });
     }
 
     // 项目根
     const projectClaudeMd = path.join(this.workdir, "CLAUDE.md");
-    const projectContent = this.readFileSync(projectClaudeMd);
+    const projectContent = this.tryReadFile(projectClaudeMd);
     if (projectContent) {
       sources.push({ label: "project root (CLAUDE.md)", content: projectContent });
     }
@@ -157,7 +157,7 @@ IMPORTANT: After loading a skill, if it contains executable commands (e.g. lines
     const cwd = process.cwd();
     if (cwd !== this.workdir) {
       const subdirClaudeMd = path.join(cwd, "CLAUDE.md");
-      const subdirContent = this.readFileSync(subdirClaudeMd);
+      const subdirContent = this.tryReadFile(subdirClaudeMd);
       if (subdirContent) {
         sources.push({ label: `subdir (${path.basename(cwd)}/CLAUDE.md)`, content: subdirContent });
       }
@@ -184,9 +184,9 @@ Platform: ${os.platform()}`;
   // 工具方法
   // ================================================================
 
-  private readFileSync(filePath: string): string | null {
+  private tryReadFile(filePath: string): string | null {
     try {
-      return require("fs").readFileSync(filePath, "utf-8");
+      return readFileSync(filePath, "utf-8");
     } catch {
       return null;
     }

@@ -1,2 +1,2 @@
 export { agentConfig } from './agent';
-export { getDataDir } from './paths';
+export { getDataDir, PATHS } from './paths';

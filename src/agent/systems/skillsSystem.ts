@@ -1,7 +1,6 @@
 
 import { promises as fs } from "fs";
 import * as path from "path";
-import { getDataDir } from "../../config/paths.js";
 
 /**
  * 技能清单 - 轻量元数据，常驻系统提示词
@@ -164,8 +163,3 @@ export class SkillsSystem {
     return { meta, body: match[2] };
   }
 }
-
-// 全局单例
-export const skillsSystem = new SkillsSystem(
-  path.join(getDataDir(), "skills"),
-);

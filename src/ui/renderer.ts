@@ -1,100 +1,104 @@
 import chalk from "chalk";
+import { ThemeConfig, defaultTheme } from "./theme";
+import { HintList, type HintItem } from "./components/HintList";
 
-const TOOL_COLORS: Record<string, typeof chalk> = {
-  read_file: chalk.blue,
-  write_file: chalk.green,
-  edit_file: chalk.yellow,
-  bash: chalk.magenta,
-  todo: chalk.green,
-  compact: chalk.cyan,
-  load_skill: chalk.cyan,
-  task: chalk.red,
-};
-
+/**
+ * Renderer - 终端输出渲染器
+ *
+ * Gemini CLI 风格：简洁、无边框、plain text
+ */
 export class Renderer {
+  private theme: ThemeConfig;
+
+  constructor(theme?: ThemeConfig) {
+    this.theme = theme || defaultTheme;
+  }
+
+  private c(name: keyof ThemeConfig["colors"]): any {
+    return (chalk as any)[this.theme.colors[name]] || chalk.white;
+  }
+
   print(msg: string) {
     console.log(msg);
   }
 
   banner() {
-    this.print(`
-${chalk.cyan("    _")}
-${chalk.cyan("   (_)___ ____ ____   ____   __  ______  ____")}
-${chalk.cyan("   / / __ \\\\_  _ \\\\")}${chalk.blue("_  _ ")}${chalk.cyan("\\\\  \\ / /\\ \\ / / / ___/ / __ \\")}
-${chalk.cyan("  / / /_/ // / // /_\\ \\/  \\ V / / /__  / /_/ /")}
-${chalk.cyan(" / /\\____//_/ /_/\\____/\\____/ \\_/ \\___/  \\____/")}
+    const p = this.c("primary");
+    const s = this.c("secondary");
+    const m = this.c("muted");
 
-${chalk.gray("─".repeat(50))}
-${chalk.blue("nano-claude-code")} ${chalk.dim("v1.0.0")}
-${chalk.gray("─".repeat(50))}
-`);
+    this.print("");
+    this.print(p("  ╭─────────────────────────────────╮"));
+    this.print(p("  │") + s("  nano-claude-code ") + m("v1.0.0") + "       " + p("│"));
+    this.print(p("  ╰─────────────────────────────────╯"));
+    this.print("");
+    this.print(m("  Tips:"));
+    this.print(m("  1. Ask questions, edit files, or run commands."));
+    this.print(m("  2. Be specific for the best results."));
+    this.print(m("  3. Create ") + s("CLAUDE.md") + m(" files to customize."));
+    this.print(m("  4. ") + s("/help") + m(" for more information."));
+    this.print("");
   }
 
   response(text: string) {
-    this.print(
-      chalk.gray("\n  ┌─") +
-        chalk.green(" Claude ") +
-        chalk.gray("─".repeat(32)),
-    );
     for (const line of text.split("\n")) {
-      this.print(chalk.gray("  │ ") + line);
+      this.print(`  ${line}`);
     }
-    this.print(chalk.gray("  └" + "─".repeat(38)) + "\n");
   }
 
   toolCall(toolName: string, summary: string) {
-    this.print(
-      `\n  ${chalk.magenta("⚡")} ${chalk.blue(toolName)} ${chalk.dim(summary)}`,
-    );
+    const info = this.c("info");
+    this.print(`  ${info("⏺")} ${info(toolName)}${chalk.dim("(")}${summary}${chalk.dim(")")}`);
   }
 
   toolResult(toolName: string, output: string, isError: boolean) {
     if (isError) {
-      // 错误：显示首行错误信息
-      const firstLine = output.split("\n")[0].slice(0, 80);
-      this.print(
-        `  ${chalk.dim("⎿  ")}${chalk.red("✗")} ${chalk.red(firstLine)}`,
-      );
+      const firstLine = output.split("\n")[0].slice(0, 100);
+      this.print(`  ${chalk.dim("⎿")}  ${this.c("error")("✗")} ${firstLine}`);
     } else {
-      // 成功：只显示对勾
-      this.print(`  ${chalk.dim("⎿  ")}${chalk.green("✔")}`);
+      this.print(`  ${chalk.dim("⎿")}  ${this.c("success")("✔")} Done`);
     }
   }
 
   skillLoad(skillName: string, success: boolean) {
-    this.print(
-      `\n  ${chalk.cyan("⏺")} ${chalk.cyan("Skill")}${chalk.dim("(")}${chalk.cyan(skillName)}${chalk.dim(")")}`,
-    );
+    const info = this.c("info");
+    this.print(`\n  ${info("⏺")} ${info("Skill")}${chalk.dim("(")}${info(skillName)}${chalk.dim(")")}`);
     if (success) {
-      this.print(`  ${chalk.dim("⎿  ")}${chalk.green("Successfully loaded")}`);
+      this.print(`  ${chalk.dim("⎿")}  ${this.c("success")("✔")} Loaded`);
     } else {
-      this.print(`  ${chalk.dim("⎿  ")}${chalk.red("Failed to load")}`);
+      this.print(`  ${chalk.dim("⎿")}  ${this.c("error")("✗")} Failed to load`);
     }
   }
 
   permissionDenied(toolName: string, reason: string) {
-    this.print(
-      `  ${chalk.red("⛔")} ${chalk.red(toolName)}: ${chalk.dim(reason)}`,
-    );
+    this.print("");
+    this.print(`  ${this.c("error")("✗")} Permission denied: ${toolName}`);
+    this.print(`    ${chalk.dim(reason)}`);
+    this.print("");
   }
 
   permissionAsk(toolName: string, toolInput: any, reason: string) {
-    const preview = JSON.stringify(toolInput, null, 0).slice(0, 120);
-    this.print(
-      `\n  ${chalk.yellow("🔒")} ${chalk.yellow("权限确认")} ${chalk.blue(toolName)}`,
-    );
-    this.print(`  ${chalk.dim(preview)}`);
-    this.print(`  ${chalk.dim(reason)}`);
+    const preview = JSON.stringify(toolInput, null, 2).slice(0, 200);
+    this.print("");
+    this.print(`  ${this.c("warning")("⚠")} Permission needed: ${this.c("info")(toolName)}`);
+    this.print(`    ${chalk.dim(preview.split("\n").join("\n    "))}`);
+    this.print(`    ${chalk.dim(reason)}`);
   }
 
   permissionPrompt() {
-    process.stdout.write(
-      `  ${chalk.cyan("允许?")} ${chalk.dim("(y/n/always)")} `,
-    );
+    process.stdout.write(`  ${this.c("primary")("Allow?")} ${chalk.dim("(y/n/always)")} `);
   }
 
   error(message: string) {
-    this.print(chalk.red(`\n  ✗ ${message}\n`));
+    this.print("");
+    this.print(`  ${this.c("error")("✗")} ${message}`);
+    this.print("");
+  }
+
+  warning(message: string) {
+    this.print("");
+    this.print(`  ${this.c("warning")("⚠")} ${message}`);
+    this.print("");
   }
 
   info(message: string) {
@@ -102,7 +106,9 @@ ${chalk.gray("─".repeat(50))}
   }
 
   success(message: string) {
-    this.print(chalk.green(`  ${message}`));
+    this.print("");
+    this.print(`  ${this.c("success")("✔")} ${message}`);
+    this.print("");
   }
 
   /**
@@ -112,14 +118,8 @@ ${chalk.gray("─".repeat(50))}
     if (!toolInput || typeof toolInput !== "object") return "";
 
     const preferredFields = [
-      "command",
-      "path",
-      "filePath",
-      "description",
-      "prompt",
-      "query",
-      "name",
-      "id",
+      "command", "path", "filePath", "description",
+      "prompt", "query", "name", "id",
     ] as const;
 
     for (const key of preferredFields) {
@@ -131,25 +131,22 @@ ${chalk.gray("─".repeat(50))}
 
     if (toolName === "todo" && Array.isArray(toolInput.items)) {
       const markers: Record<string, string> = {
-        pending: "🕘",
-        in_progress: "🔄",
-        completed: "✅",
-        "not-started": "🕘",
-        "in-progress": "🔄",
+        pending: "○",
+        in_progress: "◑",
+        completed: "●",
+        "not-started": "○",
+        "in-progress": "◑",
       };
       const preview = toolInput.items
         .slice(0, 6)
         .map((item: any, i: number) => {
           const status = String(item?.status || "").toLowerCase();
-          const marker = markers[status] || "❔";
-          const text = String(
-            item?.text || item?.title || item?.task || "",
-          ).trim();
+          const marker = markers[status] || "?";
+          const text = String(item?.text || item?.title || item?.task || "").trim();
           return `${marker}${text ? text.slice(0, 16) : `item${i + 1}`}`;
         })
         .join(" ");
-      const extra =
-        toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : "";
+      const extra = toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : "";
       return preview + extra;
     }
 
@@ -179,37 +176,28 @@ ${chalk.gray("─".repeat(50))}
     inputLine: string,
     prompt: string,
   ) {
-    // 先写当前输入行
     process.stdout.write(`\r\x1b[2K${prompt}${chalk.white(inputLine)}`);
 
     if (matches.length === 0) return;
 
-    // 在输入行下方渲染提示列表
-    for (let i = 0; i < matches.length; i++) {
-      const m = matches[i];
-      const isSelected = i === selectedIndex;
-      const prefix = isSelected ? chalk.cyan("❯") : " ";
-      const name = isSelected ? chalk.cyan(m.name) : chalk.white(m.name);
-      const desc = chalk.dim(m.description);
-      process.stdout.write(`\n\x1b[2K  ${prefix} ${name}  ${desc}`);
+    const hints: HintItem[] = matches.map((m) => ({
+      name: m.name,
+      description: m.description,
+    }));
+    const hintList = new HintList(hints, { selectedIndex }, this.theme);
+    const lines = hintList.render();
+
+    for (const line of lines) {
+      process.stdout.write(`\n\x1b[2K${line}`);
     }
 
-    // 光标回到输入行
-    if (matches.length > 0) {
-      process.stdout.write(`\x1b[${matches.length}A`);
-    }
-    // 光标定位到输入行末尾
-    const col =
-      prompt.replace(/\x1b\[[0-9;]*m/g, "").length + inputLine.length + 1;
+    process.stdout.write(`\x1b[${matches.length}A`);
+    const col = prompt.replace(/\x1b\[[0-9;]*m/g, "").length + inputLine.length + 1;
     process.stdout.write(`\r\x1b[${col}C`);
   }
 
-  /**
-   * 清除命令提示菜单
-   */
   clearHints(lineCount: number) {
     if (lineCount <= 0) return;
-    // 移到下一行，擦除从光标到屏幕底部的所有内容，再回到原位
     process.stdout.write("\n\x1b[J\x1b[A");
   }
 }

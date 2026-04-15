@@ -29,7 +29,7 @@ export class InputHandler {
   constructor(renderer: Renderer, commands: CommandRegistry, prompt?: string) {
     this.renderer = renderer;
     this.commands = commands;
-    this.prompt = prompt ?? chalk.cyan("➜") + " ";
+    this.prompt = prompt ?? chalk.cyan(">") + " ";
   }
 
   /**
@@ -76,12 +76,8 @@ export class InputHandler {
           if (this.hintMatches.length > 0 && this.hintIndex >= 0) {
             const selected = this.hintMatches[this.hintIndex];
             if (selected) {
-              // 只有当 buffer 是命令前缀时才补全
-              const buf = this.editor.getValue();
-              if (selected.name.startsWith(buf)) {
-                this.editor.clear();
-                for (const ch of selected.name) this.editor.insert(ch);
-              }
+              this.editor.clear();
+              for (const ch of selected.name) this.editor.insert(ch);
             }
           }
 

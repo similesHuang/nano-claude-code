@@ -100,17 +100,31 @@ class ClaudeCLI {
     this.running = true;
     this.spinner.start("思考中");
 
+    const onKeypress = (_str: string | undefined, key: any) => {
+      if (key?.name === "escape") {
+        this.agent?.abort();
+      }
+    };
+    process.stdin.on("keypress", onKeypress);
+
     try {
-      const response = await this.getOrCreateAgent().run(input);
+      const agent = this.getOrCreateAgent();
+      const response = await agent.run(input);
 
       this.spinner.stop();
-      this.renderer.response(response);
+
+      if (agent.isAborted) {
+        this.renderer.print(chalk.yellow("\n  (已中断)\n"));
+      } else if (response) {
+        this.renderer.response(response);
+      }
     } catch (error) {
       this.spinner.stop();
       this.renderer.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      process.stdin.removeListener("keypress", onKeypress);
+      this.running = false;
     }
-
-    this.running = false;
   }
 
   private getOrCreateAgent(): AgentLoop {
