@@ -28,16 +28,20 @@ export class HintList {
     };
   }
 
+  private c(name: keyof ThemeConfig["colors"]): any {
+    return (chalk as any)[this.theme.colors[name]] || chalk.white;
+  }
+
   private formatItem(item: HintItem, isSelected: boolean): string {
     const prefix = isSelected ? "›" : " ";
-    let line = `  ${prefix} ${chalk.white(item.name)}`;
+    let line = `  ${prefix} ${this.c("neutral")(item.name)}`;
 
     if (item.description) {
-      line += `  ${chalk.gray(item.description)}`;
+      line += `  ${this.c("muted")(item.description)}`;
     }
 
     return isSelected
-      ? (chalk as any)[this.theme.colors.primary](line)
+      ? this.c("primary")(line)
       : line;
   }
 

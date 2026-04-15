@@ -29,7 +29,7 @@ export class InputHandler {
   constructor(renderer: Renderer, commands: CommandRegistry, prompt?: string) {
     this.renderer = renderer;
     this.commands = commands;
-    this.prompt = prompt ?? chalk.cyan(">") + " ";
+    this.prompt = prompt ?? renderer.c("primary")(">") + " ";
   }
 
   /**
@@ -238,7 +238,8 @@ export class InputHandler {
     const cursor = this.editor.getCursorPos();
     const before = buf.slice(0, cursor);
     const after = buf.slice(cursor);
-    process.stdout.write(`\r\x1b[2K${this.prompt}${chalk.white(before)}${chalk.dim(after)}`);
+    const neutral = this.renderer.c("neutral");
+    process.stdout.write(`\r\x1b[2K${this.prompt}${neutral(before)}${chalk.dim(after)}`);
   }
 
   private renderWithHints() {

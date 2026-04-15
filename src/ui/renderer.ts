@@ -14,7 +14,13 @@ export class Renderer {
     this.theme = theme || defaultTheme;
   }
 
-  private c(name: keyof ThemeConfig["colors"]): any {
+  /** 获取主题配置 */
+  getTheme(): ThemeConfig {
+    return this.theme;
+  }
+
+  /** 根据主题颜色名返回 chalk 函数 */
+  c(name: keyof ThemeConfig["colors"]): any {
     return (chalk as any)[this.theme.colors[name]] || chalk.white;
   }
 
@@ -176,7 +182,7 @@ export class Renderer {
     inputLine: string,
     prompt: string,
   ) {
-    process.stdout.write(`\r\x1b[2K${prompt}${chalk.white(inputLine)}`);
+    process.stdout.write(`\r\x1b[2K${prompt}${this.c("neutral")(inputLine)}`);
 
     if (matches.length === 0) return;
 

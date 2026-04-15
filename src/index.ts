@@ -14,7 +14,7 @@ import {
 
 class ClaudeCLI {
   private renderer = new Renderer();
-  private spinner = new Spinner();
+  private spinner: Spinner;
   private commands = new CommandRegistry();
   private input: InputHandler;
   private permissionMode: PermissionMode = "default";
@@ -22,6 +22,7 @@ class ClaudeCLI {
   private agent: AgentLoop | null = null;
 
   constructor() {
+    this.spinner = new Spinner(this.renderer.getTheme());
     this.input = new InputHandler(this.renderer, this.commands);
 
     registerBuiltinCommands(this.commands, this.renderer, {
@@ -34,12 +35,12 @@ class ClaudeCLI {
       onExit: () => this.exit(),
       onClear: () => {
         this.agent?.clearConversation();
-        this.renderer.print(chalk.gray("  对话已清空\n"));
+        this.renderer.print(this.renderer.c("muted")("  对话已清空\n"));
       },
       onCompact: async (focus?: string) => {
         const agent = this.agent;
         if (!agent) {
-          this.renderer.print(chalk.gray("  没有活跃的对话\n"));
+          this.renderer.print(this.renderer.c("muted")("  没有活跃的对话\n"));
           return;
         }
         this.spinner.start("压缩中");
@@ -49,7 +50,7 @@ class ClaudeCLI {
           const msg = focus
             ? `  对话已压缩 (focus: ${focus})\n`
             : "  对话已压缩\n";
-          this.renderer.print(chalk.gray(msg));
+          this.renderer.print(this.renderer.c("muted")(msg));
         } catch {
           this.spinner.stop();
           this.renderer.error("压缩失败");
@@ -76,7 +77,7 @@ class ClaudeCLI {
       if (text === "\x03") {
         if (this.running) {
           this.running = false;
-          this.renderer.print("\n" + chalk.yellow("  (中断)"));
+          this.renderer.print("\n" + this.renderer.c("warning")("  (中断)"));
           continue;
         }
         this.exit();
@@ -114,7 +115,7 @@ class ClaudeCLI {
       this.spinner.stop();
 
       if (agent.isAborted) {
-        this.renderer.print(chalk.yellow("\n  (已中断)\n"));
+        this.renderer.print(this.renderer.c("warning")("\n  (已中断)\n"));
       } else if (response) {
         this.renderer.response(response);
       }
@@ -181,7 +182,7 @@ class ClaudeCLI {
   }
 
   private exit() {
-    this.renderer.print(chalk.gray("\n  👋 再见!\n"));
+    this.renderer.print(this.renderer.c("muted")("\n  👋 再见!\n"));
     process.stdout.write("\x1b[?25h");
     process.exit(0);
   }
