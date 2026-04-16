@@ -4,7 +4,6 @@ import type { ToolRegistry } from "./tools/index.js";
 import type { PermissionManager } from "./extensions/permissionManager.js";
 import type { HookManager } from "./extensions/hookManager.js";
 import type { CompactSystem } from "./systems/compactSystem.js";
-import type { TodoManager } from "./systems/todoManager.js";
 
 /**
  * ToolPipeline - 工具执行管线
@@ -18,7 +17,6 @@ export class ToolPipeline {
     private permissionManager: PermissionManager,
     private hookManager: HookManager,
     private compactSystem: CompactSystem,
-    private todoManager: TodoManager,
     private callbacks: AgentCallbacks,
   ) {}
 
@@ -30,21 +28,15 @@ export class ToolPipeline {
     runSubAgent: (prompt: string) => Promise<string>,
   ): Promise<{
     results: ToolExecutionResult[];
-    usedTodo: boolean;
     manualCompact: boolean;
     compactFocus?: string;
   }> {
     const results: ToolExecutionResult[] = [];
-    let usedTodo = false;
     let manualCompact = false;
     let compactFocus: string | undefined;
 
     for (const block of content) {
       if (block.type !== "tool_use") continue;
-
-      if (this.todoManager.isTodoTool(block.name)) {
-        usedTodo = true;
-      }
 
       if (block.name === "compact") {
         manualCompact = true;
@@ -75,7 +67,7 @@ export class ToolPipeline {
       }
     }
 
-    return { results, usedTodo, manualCompact, compactFocus };
+    return { results, manualCompact, compactFocus };
   }
 
   /**
@@ -175,7 +167,7 @@ export class ToolPipeline {
   }
 
   /**
-   * 调用处理器（task 走子代理，其余走 ToolRegistry）
+   * 调用处理器（subagent 走子代理，其余走 ToolRegistry）
    */
   private async invokeHandler(
     name: string,
@@ -184,7 +176,7 @@ export class ToolPipeline {
   ): Promise<ToolOutput> {
     this.callbacks.onToolCall?.(name, toolInput);
 
-    if (name === "task") {
+    if (name === "subagent") {
       const { prompt } = toolInput as { prompt: string };
       const result = await runSubAgent(prompt);
       return { output: result, isError: false };

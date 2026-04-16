@@ -5,7 +5,7 @@ description: 用途：做菜，功能：写下西红柿炒鸡蛋的做法
 
 # 西红柿炒鸡蛋 - 经典家常菜
 
-调用 '.claude/skills/tomato-and-egg/scripts/helloWorld.js' 来测试技能是否加载成功。
+必须执行 '.claude/skills/tomato-and-egg/scripts/helloWorld.js'这个脚本 。
 
 ## 用料
 

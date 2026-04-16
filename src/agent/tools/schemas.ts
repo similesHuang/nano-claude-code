@@ -1,10 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
-
 /**
- * task 工具定义 - 只在主代理中注册
+ * subagent 工具定义 - 只在主代理中注册
  */
-export const TASK_TOOL: Anthropic.Tool = {
-  name: "task",
+export const SUBAGENT_TOOL: Anthropic.Tool = {
+  name: "subagent",
   description: "Spawn a subagent with fresh context to handle a subtask. The subagent shares the filesystem but has its own isolated conversation history. Use this to delegate complex or independent subtasks.",
   input_schema: {
     type: "object" as const,
@@ -21,7 +20,6 @@ export const TASK_TOOL: Anthropic.Tool = {
     required: ["prompt"],
   },
 };
-
 /**
  * 工具定义数组 - Anthropic API 格式
  * 一眼看到所有可用工具
@@ -100,30 +98,61 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "todo",
-    description: "Manage a structured todo list to plan and track multi-step tasks.\n\nWorkflow:\n1. PLAN FIRST: When receiving a complex task, immediately create a todo list with ALL steps as 'pending'.\n2. EXECUTE IN ORDER: Before starting each step, mark it 'in_progress' (only ONE at a time).\n3. MARK DONE: After completing a step, mark it 'completed' immediately, then move to the next.\n\nDo NOT create a todo with items already marked as completed. Always plan first, then execute step by step.",
+    name: "task_create",
+    description: "Create a new persistent task. Tasks survive context compression and persist across sessions as JSON files.",
     input_schema: {
       type: "object" as const,
       properties: {
-        items: {
+        subject: { type: "string", description: "Brief task title" },
+        description: { type: "string", description: "Detailed task description" },
+      },
+      required: ["subject"],
+    },
+  },
+  {
+    name: "task_update",
+    description: "Update a task's status, owner, or dependencies. When a task is completed, it is automatically removed from other tasks' blockedBy lists.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: { type: "integer", description: "ID of the task to update" },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed", "deleted"],
+          description: "New status for the task",
+        },
+        owner: { type: "string", description: "Set when a teammate claims the task" },
+        addBlockedBy: {
           type: "array",
-          description: "Array of todo items",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string", description: "Unique identifier for the task" },
-              text: { type: "string", description: "Task description" },
-              status: {
-                type: "string",
-                enum: ["pending", "in_progress", "completed"],
-                description: "Task status: pending (not started), in_progress (currently working on), completed (done)",
-              },
-            },
-            required: ["id", "text", "status"],
-          },
+          items: { type: "integer" },
+          description: "Task IDs that must complete before this task can start",
+        },
+        addBlocks: {
+          type: "array",
+          items: { type: "integer" },
+          description: "Task IDs that this task blocks (bidirectional: also updates their blockedBy)",
         },
       },
-      required: ["items"],
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "task_list",
+    description: "List all tasks with status summary and dependency info.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
+    name: "task_get",
+    description: "Get full details of a task by ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: { type: "integer", description: "ID of the task to retrieve" },
+      },
+      required: ["task_id"],
     },
   },
   {

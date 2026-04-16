@@ -1,17 +1,17 @@
 import { runBash } from "./bash.js";
 import { runRead, runWrite, runEdit } from "./file.js";
-import type { TodoManager } from "../systems/todoManager.js";
+import type { TaskManager } from "../taskRuntime/taskManager.js";
 import type { SkillsSystem } from "../systems/skillsSystem.js";
 import type { MemorySystem } from "../extensions/memorySystem.js";
 import type { ToolOutput } from "../types.js";
 
-export { TOOLS, TASK_TOOL } from "./schemas.js";
+export { TOOLS, SUBAGENT_TOOL } from "./schemas.js";
 
 /**
  * 工具依赖注入接口
  */
 export interface ToolDeps {
-  todoManager: TodoManager;
+  taskManager: TaskManager;
   skillsSystem: SkillsSystem;
   memorySystem: MemorySystem;
 }
@@ -31,7 +31,12 @@ export class ToolRegistry {
       read_file: async (input) => this.ok(await runRead(input.path, input.limit)),
       write_file: async (input) => this.ok(await runWrite(input.path, input.content)),
       edit_file: async (input) => this.ok(await runEdit(input.path, input.old_text, input.new_text)),
-      todo: async (input) => this.ok(deps.todoManager.update(input.items)),
+      task_create: async (input) => this.ok(deps.taskManager.create(input.subject, input.description)),
+      task_update: async (input) => this.ok(deps.taskManager.update(
+        input.task_id, input.status, input.owner, input.addBlockedBy, input.addBlocks,
+      )),
+      task_list: async () => this.ok(deps.taskManager.listAll()),
+      task_get: async (input) => this.ok(deps.taskManager.get(input.task_id)),
       compact: async () => this.ok("Compacting conversation..."),
       load_skill: async (input) => this.ok(deps.skillsSystem.loadSkill(input.name)),
       save_memory: async (input) =>

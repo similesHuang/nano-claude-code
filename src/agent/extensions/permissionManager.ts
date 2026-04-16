@@ -64,8 +64,11 @@ const DEFAULT_RULES: PermissionRule[] = [
   { tool: "bash", content: "sudo *", behavior: "deny" },
   // 允许所有文件读取
   { tool: "read_file", path: "*", behavior: "allow" },
-  // 允许非写操作的工具（todo, compact, load_skill）
-  { tool: "todo", behavior: "allow" },
+  // 允许非写操作的工具（task_*, compact, load_skill）
+  { tool: "task_create", behavior: "allow" },
+  { tool: "task_update", behavior: "allow" },
+  { tool: "task_list", behavior: "allow" },
+  { tool: "task_get", behavior: "allow" },
   { tool: "compact", behavior: "allow" },
   { tool: "load_skill", behavior: "allow" },
 ];

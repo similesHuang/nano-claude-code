@@ -91,11 +91,13 @@ export class SystemPromptBuilder {
   private sectionCore(): string {
     return `You are a coding agent at ${this.workdir}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
 
-For complex multi-step tasks, ALWAYS use the todo tool to plan BEFORE acting:
-1. Create a todo list with all steps as "pending"
-2. Mark one step "in_progress", do the work, then mark it "completed"
-3. Repeat until all steps are done
-Never skip the planning phase or mark tasks completed before actually doing them.`;
+For complex multi-step tasks, ALWAYS use task tools to plan BEFORE acting:
+1. Use task_create to create tasks for each step (status starts as "pending")
+2. Use task_update to mark one step "in_progress", do the work, then mark it "completed"
+3. Use task_list to review progress at any time
+4. Use addBlockedBy/addBlocks to express dependencies between tasks
+Never skip the planning phase or mark tasks completed before actually doing them.
+Tasks persist on disk as JSON files in .tasks/ — they survive context compression.`;
   }
 
   /** 段落 2: 持久化记忆（委托给 MemorySystem） */

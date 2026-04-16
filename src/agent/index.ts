@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
+import * as path from "path";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.js";
-import { TASK_TOOL, TOOLS, ToolRegistry } from "./tools/index.js";
-import { TodoManager, SkillsSystem, CompactSystem } from "./systems/index.js";
+import { SUBAGENT_TOOL, TOOLS, ToolRegistry } from "./tools/index.js";
+import { SkillsSystem, CompactSystem } from "./systems/index.js";
+import { TaskManager } from "./taskRuntime/taskManager.js";
 import { PermissionManager, HookManager, MemorySystem, DreamConsolidator, ErrorRecovery } from "./extensions/index.js";
 import { SystemPromptBuilder } from "./extensions/systemPromptBuilder.js";
 import { PATHS } from "../config/paths.js";
@@ -12,7 +14,7 @@ import { ToolPipeline } from "./toolPipeline.js";
  * AgentLoop - 核心 AI 代理循环
  *
  * 同时支持主代理和子代理两种模式：
- * - 主代理：可派发子代理、todo nag 提醒
+ * - 主代理：可派发子代理、task 持久化
  * - 子代理：轻量模式，独立上下文，完成后返回摘要即丢弃
  */
 export class AgentLoop {
@@ -26,7 +28,6 @@ export class AgentLoop {
   private callbacks: AgentCallbacks;
   private messages: Anthropic.MessageParam[] = [];
   private tools: Anthropic.Tool[];
-  private readonly NAG_THRESHOLD: number = 3;
   private skillsInitialized: boolean = false;
   private currentStream: any = null;
   private aborted = false;
@@ -39,7 +40,7 @@ export class AgentLoop {
   private dreamConsolidator: DreamConsolidator;
   private promptBuilder: SystemPromptBuilder;
   private errorRecovery: ErrorRecovery;
-  private todoManager: TodoManager;
+  private taskManager: TaskManager;
   private skillsSystem: SkillsSystem;
   private toolRegistry: ToolRegistry;
   private toolPipeline: ToolPipeline;
@@ -68,11 +69,11 @@ export class AgentLoop {
     this.memorySystem = new MemorySystem(teamMemoryDir, PATHS.privateMemory);
     this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, PATHS.privateMemory);
 
-    this.todoManager = new TodoManager();
+    this.taskManager = new TaskManager(path.join(process.cwd(), ".tasks"));
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
 
     this.toolRegistry = new ToolRegistry({
-      todoManager: this.todoManager,
+      taskManager: this.taskManager,
       skillsSystem: this.skillsSystem,
       memorySystem: this.memorySystem,
     });
@@ -82,7 +83,6 @@ export class AgentLoop {
       this.permissionManager,
       this.hookManager,
       this.compactSystem,
-      this.todoManager,
       this.callbacks,
     );
 
@@ -95,8 +95,8 @@ export class AgentLoop {
       ? this.promptBuilder.buildForSubAgent()
       : this.promptBuilder.build();
 
-    // 构建工具列表：子代理不需要 task 工具（避免无限递归）
-    this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, TASK_TOOL];
+    // 构建工具列表：子代理不需要 subagent 工具（避免无限递归）
+    this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, SUBAGENT_TOOL];
   }
 
   /**
@@ -201,7 +201,7 @@ export class AgentLoop {
       }
 
       try {
-        const { results, usedTodo, manualCompact, compactFocus } =
+        const { results, manualCompact, compactFocus } =
           await this.toolPipeline.executeAll(
             response.content,
             (prompt) => this.runSubAgent(prompt),
@@ -221,22 +221,6 @@ export class AgentLoop {
           continue;
         }
 
-        // todo nag 只在主代理中生效
-        if (!this.isSubAgent) {
-          if (usedTodo) {
-            this.todoManager.resetNag();
-          } else {
-            this.todoManager.incrementRound();
-          }
-
-          if (this.todoManager.shouldNag(this.NAG_THRESHOLD)) {
-            this.messages.push({
-              role: "user",
-              content: "<reminder>Update your todos.</reminder>",
-            });
-            this.todoManager.resetNag();
-          }
-        }
       } catch (error) {
         const errorResults = this.createErrorToolResults(response.content, error);
         this.messages.push({
@@ -306,7 +290,7 @@ export class AgentLoop {
   }
 
   /**
-   * 派发子代理 — 独立实例，不共享 todoManager/skillsSystem/memory
+   * 派发子代理 — 独立实例，不共享 taskManager/skillsSystem/memory
    */
   private async runSubAgent(prompt: string): Promise<string> {
     const subAgent = new AgentLoop(
@@ -381,7 +365,7 @@ export class AgentLoop {
 
   clearConversation(): void {
     this.messages = [];
-    this.todoManager.clear();
+    this.taskManager.clear();
     if (this.memorySystem.isSuppressed()) {
       this.memorySystem.restoreMemories();
     }

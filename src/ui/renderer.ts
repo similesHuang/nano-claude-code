@@ -135,25 +135,22 @@ export class Renderer {
       }
     }
 
-    if (toolName === "todo" && Array.isArray(toolInput.items)) {
-      const markers: Record<string, string> = {
-        pending: "○",
-        in_progress: "◑",
-        completed: "●",
-        "not-started": "○",
-        "in-progress": "◑",
-      };
-      const preview = toolInput.items
-        .slice(0, 6)
-        .map((item: any, i: number) => {
-          const status = String(item?.status || "").toLowerCase();
-          const marker = markers[status] || "?";
-          const text = String(item?.text || item?.title || item?.task || "").trim();
-          return `${marker}${text ? text.slice(0, 16) : `item${i + 1}`}`;
-        })
-        .join(" ");
-      const extra = toolInput.items.length > 6 ? ` +${toolInput.items.length - 6}` : "";
-      return preview + extra;
+    if (toolName === "task_list") {
+      return "listing tasks";
+    }
+
+    if (toolName === "task_create") {
+      return toolInput.subject || "new task";
+    }
+
+    if (toolName === "task_update") {
+      const parts: string[] = [`#${toolInput.task_id}`];
+      if (toolInput.status) parts.push(toolInput.status);
+      return parts.join(" ");
+    }
+
+    if (toolName === "task_get") {
+      return `#${toolInput.task_id}`;
     }
 
     if (Array.isArray(toolInput.items)) {
