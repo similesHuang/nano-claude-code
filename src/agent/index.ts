@@ -69,7 +69,9 @@ export class AgentLoop {
     this.memorySystem = new MemorySystem(teamMemoryDir, PATHS.privateMemory);
     this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, PATHS.privateMemory);
 
-    this.taskManager = new TaskManager(path.join(process.cwd(), ".tasks"));
+    this.taskManager = new TaskManager(path.join(PATHS.taskDir));
+    // 启动时清理已完成的任务链，保持工作图简洁（仅主代理执行，子代理不持久化任务）
+    this.taskManager.pruneCompletedChains();
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
 
     this.toolRegistry = new ToolRegistry({

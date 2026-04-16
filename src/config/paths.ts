@@ -20,4 +20,5 @@ export const PATHS = {
   globalSkills: path.join(getDataDir(), "skills"),
   teamMemory: (cwd: string) => path.join(cwd, ".memory"),
   projectSkills: (cwd: string) => path.join(cwd, ".claude", "skills"),
+  taskDir: path.join(getDataDir(), ".tasks"),
 } as const;

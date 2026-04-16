@@ -35,11 +35,7 @@ sentiment: neutral
 - `systemPromptBuilder.ts`: 动态构建 system prompt
 
 **src/ui/** — 终端 UI 层
-- `input.ts`, `renderer.ts`, `spinner.ts`, `editor.ts`, `commands.ts`
-
 **src/config/** — 配置
-- `agent.ts`: 模型/API 配置
-- `paths.ts`: 数据目录路径
 
 ### 关键设计
 - 子代理不含 `task` 工具，防止无限递归
