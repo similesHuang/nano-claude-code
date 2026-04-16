@@ -185,6 +185,14 @@ export class AgentLoop {
       this.currentStream = null;
 
       if (this.aborted || !response) {
+        // callWithRetry 返回 null 表示 API 调用失败（模型未配置/无效/网络错误等）
+        if (!this.aborted && !response) {
+          const err = new Error(
+            `API 调用失败，请检查 .env 配置：模型名称(CLAUDE_MODEL)、API密钥(ANTHROPIC_API_KEY) 和 baseUrl(ANTHROPIC_BASE_URL) 是否正确，当前模型: ${this.model}`
+          );
+          this.callbacks.onError?.(err);
+          throw err;
+        }
         break;
       }
 
