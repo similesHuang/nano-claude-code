@@ -183,6 +183,33 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "background_run",
+    description: "Run a command in a background thread. Returns task_id immediately — use check_background to get results later.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        command: {
+          type: "string",
+          description: "The shell command to run in background",
+        },
+      },
+      required: ["command"],
+    },
+  },
+  {
+    name: "check_background",
+    description: "Check background task status. Omit task_id to list all running tasks.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: {
+          type: "string",
+          description: "Task ID to check. Omit to list all.",
+        },
+      },
+    },
+  },
+  {
     name: "save_memory",
     description: "Save a persistent memory that survives across sessions. Use for: user preferences, confirmed good practices, repeated corrections, non-obvious project facts, external resource pointers. Do NOT use for: code structure derivable from the repo, temporary task state (current branch, this week's PRs), secrets/credentials.",
     input_schema: {

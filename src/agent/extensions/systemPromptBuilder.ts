@@ -93,9 +93,8 @@ export class SystemPromptBuilder {
 
 For complex multi-step tasks, ALWAYS use task tools to plan BEFORE acting:
 1. Use task_create to create tasks for each step (status starts as "pending")
-2. Use task_update to mark one step "in_progress", do the work, then mark it "completed"
+2. Use task_update to mark steps "in_progress"/"completed" and express dependencies with addBlockedBy/addBlocks
 3. Use task_list to review progress at any time
-4. Use addBlockedBy/addBlocks to express dependencies between tasks
 Never skip the planning phase or mark tasks completed before actually doing them.
 Tasks persist on disk as JSON files in .tasks/ — they survive context compression.`;
   }

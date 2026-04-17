@@ -3,6 +3,7 @@ import { runRead, runWrite, runEdit } from "./file.js";
 import type { TaskManager } from "../taskRuntime/taskManager.js";
 import type { SkillsSystem } from "../systems/skillsSystem.js";
 import type { MemorySystem } from "../extensions/memorySystem.js";
+import type { AsyncTask } from "../taskRuntime/asyncTask.js";
 import type { ToolOutput } from "../types.js";
 
 export { TOOLS, SUBAGENT_TOOL } from "./schemas.js";
@@ -14,6 +15,7 @@ export interface ToolDeps {
   taskManager: TaskManager;
   skillsSystem: SkillsSystem;
   memorySystem: MemorySystem;
+  asyncTask: AsyncTask;
 }
 
 /**
@@ -46,6 +48,8 @@ export class ToolRegistry {
             input.content, input.scope, input.sentiment,
           ),
         ),
+      background_run: async (input) => this.ok(deps.asyncTask.run(input.command)),
+      check_background: async (input) => this.ok(deps.asyncTask.check(input.task_id)),
     };
   }
 

@@ -26,6 +26,7 @@
   },
   "homepage": "https://github.com/similesHuang/nano-claude-code#readme",
   "devDependencies": {
+    "@types/async-lock": "^1.4.2",
     "@types/inquirer": "^9.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.19.37",
@@ -34,6 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.81.0",
+    "async-lock": "^1.4.1",
     "chalk": "^5.0.0",
     "commander": "^12.0.0",
     "dotenv": "^17.3.1",

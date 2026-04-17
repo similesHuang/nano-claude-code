@@ -4,6 +4,7 @@ import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.j
 import { SUBAGENT_TOOL, TOOLS, ToolRegistry } from "./tools/index.js";
 import { SkillsSystem, CompactSystem } from "./systems/index.js";
 import { TaskManager } from "./taskRuntime/taskManager.js";
+import { AsyncTask } from "./taskRuntime/asyncTask.js";
 import { PermissionManager, HookManager, MemorySystem, DreamConsolidator, ErrorRecovery } from "./extensions/index.js";
 import { SystemPromptBuilder } from "./extensions/systemPromptBuilder.js";
 import { PATHS } from "../config/paths.js";
@@ -41,6 +42,7 @@ export class AgentLoop {
   private promptBuilder: SystemPromptBuilder;
   private errorRecovery: ErrorRecovery;
   private taskManager: TaskManager;
+  private asyncTask: AsyncTask;
   private skillsSystem: SkillsSystem;
   private toolRegistry: ToolRegistry;
   private toolPipeline: ToolPipeline;
@@ -73,11 +75,13 @@ export class AgentLoop {
     // 启动时清理已完成的任务链，保持工作图简洁（仅主代理执行，子代理不持久化任务）
     this.taskManager.pruneCompletedChains();
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
+    this.asyncTask = new AsyncTask(process.cwd());
 
     this.toolRegistry = new ToolRegistry({
       taskManager: this.taskManager,
       skillsSystem: this.skillsSystem,
       memorySystem: this.memorySystem,
+      asyncTask: this.asyncTask,
     });
 
     this.toolPipeline = new ToolPipeline(
@@ -167,6 +171,21 @@ export class AgentLoop {
 
       const response = await this.errorRecovery.callWithRetry(
         () => {
+          // 每次 LLM 调用前注入后台任务完成通知
+          const notifs = this.asyncTask.drainNotifications();
+          if (notifs.length > 0) {
+            const notifText = notifs
+              .map(
+                (n) =>
+                  `[bg:${n.taskId}] ${n.status}: ${n.preview} (output_file=${n.outputFile})`,
+              )
+              .join("\n");
+            this.messages.push({
+              role: "user",
+              content: `<background-results>\n${notifText}\n</background-results>`,
+            });
+          }
+
           const stream = this.client.messages.stream({
             model: this.model,
             system: this.systemPrompt,
