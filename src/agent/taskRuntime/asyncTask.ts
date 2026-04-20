@@ -84,7 +84,7 @@ export class AsyncTask {
       });
     }, TASK_TIMEOUT_MS);
 
-    return `Background task ${taskId} started: ${command.slice(0, 80)}`;
+    return `[bg:${taskId}] Running: ${command.slice(0, 80)}`;
   }
 
   private finish(taskId: string, result: string, status: TaskInfo["status"]): void {
@@ -142,17 +142,5 @@ export class AsyncTask {
       this.notificationQueue = [];
       return notifs;
     });
-  }
-
-  detectStalled(): string[] {
-    const now = Date.now();
-    const stalled: string[] = [];
-    for (const [taskId, info] of this.tasks) {
-      if (info.status !== "running") continue;
-      if (now - info.startedAt > STALL_THRESHOLD_MS) {
-        stalled.push(taskId);
-      }
-    }
-    return stalled;
   }
 }

@@ -99,7 +99,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "task_create",
-    description: "Create a new persistent task. Tasks survive context compression and persist across sessions as JSON files.",
+    description: "Create a persistent task that survives context compression and persists across sessions.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -111,7 +111,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "task_update",
-    description: "Update a task's status, owner, or dependencies. When a task is completed, it is automatically removed from other tasks' blockedBy lists.",
+    description: "Update a task's status, owner, or dependencies. Completed tasks are automatically removed from other tasks' blockedBy lists.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -184,7 +184,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "background_run",
-    description: "Run a command in a background thread. Returns task_id immediately — use check_background to get results later.",
+    description: "Run a command in a background thread. Returns [bg:taskId] immediately — after this tool result, immediately call check_background with that task_id (in the same response turn) to get the full output. Do NOT return the task_id to the user and move on; you MUST follow up to retrieve results.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -198,13 +198,13 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "check_background",
-    description: "Check background task status. Omit task_id to list all running tasks.",
+    description: "Check background task result. Pass the task_id from background_run to get full stdout/stderr. If task is still running, you will see [running] — wait and check again. Always check immediately after background_run returns.",
     input_schema: {
       type: "object" as const,
       properties: {
         task_id: {
           type: "string",
-          description: "Task ID to check. Omit to list all.",
+          description: "Task ID from background_run (e.g. b8jtqmv1). Omit to list all running tasks.",
         },
       },
     },
