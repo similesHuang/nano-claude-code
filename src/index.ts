@@ -65,6 +65,9 @@ class ClaudeCLI {
       if (!this.running) this.exit();
     });
 
+    // 预初始化 agent
+    this.getOrCreateAgent();
+
     this.renderer.banner();
     await this.repl();
   }
@@ -109,12 +112,11 @@ class ClaudeCLI {
     process.stdin.on("keypress", onKeypress);
 
     try {
-      const agent = this.getOrCreateAgent();
-      const response = await agent.run(input);
+      const response = await this.agent!.run(input);
 
       this.spinner.stop();
 
-      if (agent.isAborted) {
+      if (this.agent!.isAborted) {
         this.renderer.print(this.renderer.c("warning")("\n  (已中断)\n"));
       } else if (response) {
         this.renderer.response(response);

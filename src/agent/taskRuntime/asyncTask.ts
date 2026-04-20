@@ -26,7 +26,7 @@ export class AsyncTask {
   private workDir: string;
   private tasks: Map<string, TaskInfo> = new Map();
   private processes: Map<string, ChildProcess> = new Map();
-  private notificationQueue: TaskNotification[] = [];
+  private notificationQueue: TaskNotification[] = []; // 已完成任务的通知队列
   private lock = new AsyncLock();
 
   constructor(workDir: string = process.cwd()) {
