@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { promises as fs } from "fs";
+import * as fsSync from "fs";
 import * as path from "path";
 import type { CompactConfig } from "../types";
 
@@ -125,13 +126,13 @@ export class CompactSystem {
 
     return messages;
   }
-  // 第三层：压缩历史对话，保留重点和最近的工具结果
+  // 第三层：压缩历史对话
   async compactHistory(
     messages: Anthropic.MessageParam[],
     summarizeHistory: (messages: Anthropic.MessageParam[]) => Promise<string>,
     focus?: string,
   ): Promise<Anthropic.MessageParam[]> {
-    await this.writeTranscript(messages);
+    const transcriptPath = await this.writeTranscript(messages);
 
     let summary = await summarizeHistory(messages);
 
@@ -143,6 +144,8 @@ export class CompactSystem {
       const recentLines = this.recentFiles.map((item) => `- ${item}`).join("\n");
       summary += `\n\nRecent files to reopen if needed:\n${recentLines}`;
     }
+
+    summary += `\n\nFull transcript saved at: ${transcriptPath}`;
 
     this.hasCompacted = true;
     this.lastSummary = summary;
@@ -171,11 +174,28 @@ export class CompactSystem {
     return this.hasCompacted;
   }
 
-  private async writeTranscript(messages: Anthropic.MessageParam[]): Promise<void> {
+  private async writeTranscript(messages: Anthropic.MessageParam[]): Promise<string> {
     await fs.mkdir(this.transcriptDir, { recursive: true });
     const filePath = path.join(this.transcriptDir, `transcript_${Date.now()}.jsonl`);
 
     const lines = messages.map((message) => JSON.stringify(message));
     await fs.writeFile(filePath, lines.join("\n") + "\n", "utf-8");
+    return filePath;
+  }
+
+  /**
+   * 清理 tool-results 缓存目录
+   */
+  clearToolResults(): void {
+    try {
+      if (fsSync.existsSync(this.toolResultsDir)) {
+        const files = fsSync.readdirSync(this.toolResultsDir);
+        for (const file of files) {
+          fsSync.unlinkSync(path.join(this.toolResultsDir, file));
+        }
+      }
+    } catch {
+      // ignore cache clear error
+    }
   }
 }

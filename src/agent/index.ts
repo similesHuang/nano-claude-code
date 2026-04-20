@@ -72,10 +72,8 @@ export class AgentLoop {
     this.dreamConsolidator = new DreamConsolidator(teamMemoryDir, PATHS.privateMemory);
 
     this.taskManager = new TaskManager(path.join(PATHS.taskDir));
-    // 启动时清理已完成的任务链，保持工作图简洁（仅主代理执行，子代理不持久化任务）
-    this.taskManager.pruneCompletedChains();
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
-    this.asyncTask = new AsyncTask(process.cwd());
+    this.asyncTask = new AsyncTask(process.cwd(),PATHS.backendTaskDir);
 
     this.toolRegistry = new ToolRegistry({
       taskManager: this.taskManager,
@@ -405,6 +403,17 @@ export class AgentLoop {
 
   setPermissionMode(mode: PermissionMode): void {
     this.permissionManager.mode = mode;
+  }
+
+  /**
+   * 退出时清理资源
+   */
+  destroy(): void {
+    if (!this.isSubAgent) {
+      this.taskManager.pruneCompletedChains();
+      this.asyncTask.clearTasksCache();
+      this.compactSystem.clearToolResults();
+    }
   }
 
   async compactConversation(focus?: string): Promise<string> {

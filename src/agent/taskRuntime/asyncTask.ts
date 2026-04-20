@@ -1,5 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import AsyncLock from "async-lock";
+import * as fs from "fs";
+import * as path from "path";
 
 interface TaskInfo {
   id: string;
@@ -24,13 +26,15 @@ const TASK_TIMEOUT_MS = 300 * 1000;
 
 export class AsyncTask {
   private workDir: string;
+  private backendTaskDir: string;
   private tasks: Map<string, TaskInfo> = new Map();
   private processes: Map<string, ChildProcess> = new Map();
   private notificationQueue: TaskNotification[] = []; // 已完成任务的通知队列
   private lock = new AsyncLock();
 
-  constructor(workDir: string = process.cwd()) {
+  constructor(workDir: string = process.cwd(), backendTaskDir: string) {
     this.workDir = workDir;
+    this.backendTaskDir = backendTaskDir;
   }
 
   private preview(output: string, limit = 500): string {
@@ -87,7 +91,11 @@ export class AsyncTask {
     return `[bg:${taskId}] Running: ${command.slice(0, 80)}`;
   }
 
-  private finish(taskId: string, result: string, status: TaskInfo["status"]): void {
+  private finish(
+    taskId: string,
+    result: string,
+    status: TaskInfo["status"],
+  ): void {
     this.lock.acquire("tasks", () => {
       const info = this.tasks.get(taskId);
       if (!info) return;
@@ -97,6 +105,17 @@ export class AsyncTask {
       info.finishedAt = Date.now();
       info.resultPreview = this.preview(result);
 
+      // 写入缓存文件
+      const outputFile = path.join(this.backendTaskDir, `${taskId}.txt`);
+      try {
+        if (!fs.existsSync(this.backendTaskDir)) {
+          fs.mkdirSync(this.backendTaskDir, { recursive: true });
+        }
+        fs.writeFileSync(outputFile, result);
+      } catch {
+        // ignore write error
+      }
+
       this.tasks.set(taskId, info);
       this.processes.delete(taskId);
 
@@ -105,7 +124,7 @@ export class AsyncTask {
         status,
         command: info.command.slice(0, 80),
         preview: info.resultPreview,
-        outputFile: "",
+        outputFile,
       };
       this.notificationQueue.push(notification);
     });
@@ -123,14 +142,14 @@ export class AsyncTask {
           result_preview: info.resultPreview,
         },
         null,
-        2
+        2,
       );
     }
 
     const lines: string[] = [];
     for (const [tid, info] of this.tasks) {
       lines.push(
-        `${tid}: [${info.status}] ${info.command.slice(0, 60)} -> ${info.resultPreview || "(running)"}`
+        `${tid}: [${info.status}] ${info.command.slice(0, 60)} -> ${info.resultPreview || "(running)"}`,
       );
     }
     return lines.length > 0 ? lines.join("\n") : "No background tasks.";
@@ -142,5 +161,20 @@ export class AsyncTask {
       this.notificationQueue = [];
       return notifs;
     });
+  }
+
+  clearTasksCache(): void {
+    try {
+      if (fs.existsSync(this.backendTaskDir)) {
+        const files = fs.readdirSync(this.backendTaskDir);
+        for (const file of files) {
+          if (file.endsWith(".txt")) {
+            fs.unlinkSync(path.join(this.backendTaskDir, file));
+          }
+        }
+      }
+    } catch {
+      // ignore cache clear error
+    }
   }
 }

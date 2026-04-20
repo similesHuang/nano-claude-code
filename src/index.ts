@@ -184,6 +184,7 @@ class ClaudeCLI {
   }
 
   private exit() {
+    this.agent?.destroy();
     this.renderer.print(this.renderer.c("muted")("\n  👋 再见!\n"));
     process.stdout.write("\x1b[?25h");
     process.exit(0);

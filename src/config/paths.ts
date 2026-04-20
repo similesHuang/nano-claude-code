@@ -21,6 +21,5 @@ export const PATHS = {
   teamMemory: (cwd: string) => path.join(cwd, ".memory"),
   projectSkills: (cwd: string) => path.join(cwd, ".claude", "skills"),
   taskDir: path.join(getDataDir(), ".tasks"),
-  scheduledTasksFile: path.join(getDataDir(), "scheduled_tasks.json"),
-  cronLockFile: path.join(getDataDir(), "cron.lock"),
+  backendTaskDir: path.join(getDataDir(), "backendTaskcache"),
 } as const;
