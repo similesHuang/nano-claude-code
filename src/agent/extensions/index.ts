@@ -18,7 +18,6 @@ export {
 
 export {
   MemorySystem,
-  DreamConsolidator,
   MEMORY_TYPES,
   MEMORY_SCOPES,
   MEMORY_SENTIMENTS,
@@ -26,8 +25,9 @@ export {
   type MemoryScope,
   type MemorySentiment,
   type MemoryEntry,
-  type ConsolidationAction,
-} from "../extensions/memorySystem";
+  
+} from "./memorySystem/memorySystem";
+export { DreamConsolidator } from "./memorySystem/dreamConsolidator";
 
 export {
   ErrorRecovery,

@@ -2,7 +2,7 @@ import { runBash } from "./bash.js";
 import { runRead, runWrite, runEdit } from "./file.js";
 import type { TaskManager } from "../taskRuntime/taskManager.js";
 import type { SkillsSystem } from "../systems/skillsSystem.js";
-import type { MemorySystem } from "../extensions/memorySystem.js";
+import type { MemorySystem } from "../extensions/memorySystem/memorySystem.js";
 import type { AsyncTask } from "../taskRuntime/asyncTask.js";
 import type { ToolOutput } from "../types.js";
 
