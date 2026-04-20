@@ -26,7 +26,7 @@ export class AsyncTask {
   private workDir: string;
   private tasks: Map<string, TaskInfo> = new Map();
   private processes: Map<string, ChildProcess> = new Map();
-  private notificationQueue: TaskNotification[] = []; // 已完成任务通知
+  private notificationQueue: TaskNotification[] = [];
   private lock = new AsyncLock();
 
   constructor(workDir: string = process.cwd()) {
@@ -41,21 +41,10 @@ export class AsyncTask {
   run(command: string): string {
     const taskId = Math.random().toString(36).slice(2, 10);
 
-    this.tasks.set(taskId, {
-      id: taskId,
-      status: "running",
-      command,
-      startedAt: Date.now(),
-      finishedAt: null,
-      result: "",
-      resultPreview: "",
-    });
-
     const child = spawn(command, {
       shell: true,
       cwd: this.workDir,
     });
-    this.processes.set(taskId, child);
 
     let output = "";
     child.stdout?.on("data", (data) => {
@@ -63,6 +52,19 @@ export class AsyncTask {
     });
     child.stderr?.on("data", (data) => {
       output += data.toString();
+    });
+
+    this.lock.acquire("tasks", () => {
+      this.tasks.set(taskId, {
+        id: taskId,
+        status: "running",
+        command,
+        startedAt: Date.now(),
+        finishedAt: null,
+        result: "",
+        resultPreview: "",
+      });
+      this.processes.set(taskId, child);
     });
 
     child.on("close", (code) => {
@@ -73,18 +75,20 @@ export class AsyncTask {
     });
 
     setTimeout(() => {
-      const info = this.tasks.get(taskId);
-      if (info && info.status === "running") {
-        child.kill();
-        this.finish(taskId, "Error: Timeout (300s)", "timeout");
-      }
+      this.lock.acquire("tasks", () => {
+        const info = this.tasks.get(taskId);
+        if (info && info.status === "running") {
+          child.kill();
+          this.finish(taskId, "Error: Timeout (300s)", "timeout");
+        }
+      });
     }, TASK_TIMEOUT_MS);
 
     return `Background task ${taskId} started: ${command.slice(0, 80)}`;
   }
 
   private finish(taskId: string, result: string, status: TaskInfo["status"]): void {
-    this.lock.acquire("finish", () => {
+    this.lock.acquire("tasks", () => {
       const info = this.tasks.get(taskId);
       if (!info) return;
 
@@ -132,10 +136,12 @@ export class AsyncTask {
     return lines.length > 0 ? lines.join("\n") : "No background tasks.";
   }
 
-  drainNotifications(): TaskNotification[] {
-    const notifs = [...this.notificationQueue];
-    this.notificationQueue = [];
-    return notifs;
+  drainNotifications(): Promise<TaskNotification[]> {
+    return this.lock.acquire("drain", () => {
+      const notifs = [...this.notificationQueue];
+      this.notificationQueue = [];
+      return notifs;
+    });
   }
 
   detectStalled(): string[] {

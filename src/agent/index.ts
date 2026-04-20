@@ -170,9 +170,9 @@ export class AgentLoop {
       }
 
       const response = await this.errorRecovery.callWithRetry(
-        () => {
+       async () => {
           // 每次 LLM 调用前注入后台任务完成通知
-          const notifs = this.asyncTask.drainNotifications();
+          const notifs = await this.asyncTask.drainNotifications();
           if (notifs.length > 0) {
             const notifText = notifs
               .map(
