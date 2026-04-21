@@ -79,13 +79,12 @@ export class AgentLoop {
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
     this.asyncTask = new AsyncTask(process.cwd(),PATHS.backendTaskDir);
 
-    this.toolRegistry = new ToolRegistry({
+    const baseDeps = {
       taskManager: this.taskManager,
       skillsSystem: this.skillsSystem,
       memorySystem: this.memorySystem,
       asyncTask: this.asyncTask,
-    });
-
+    };
     // ── 团队模式初始化（仅主代理） ──
     if (config.teamMode) {
       const cwd = process.cwd();
@@ -96,16 +95,15 @@ export class AgentLoop {
         this.client,
         this.model,
       );
-      // 重新构建 registry，注入团队依赖
-      this.toolRegistry = new ToolRegistry({
-        taskManager: this.taskManager,
-        skillsSystem: this.skillsSystem,
-        memorySystem: this.memorySystem,
-        asyncTask: this.asyncTask,
+    }
+
+    this.toolRegistry = new ToolRegistry({
+      ...baseDeps,
+      ...(config.teamMode && {
         teammateManager: this.teammateManager,
         messageBus: this.messageBus,
-      });
-    }
+      }),
+    });
 
     this.toolPipeline = new ToolPipeline(
       this.toolRegistry,

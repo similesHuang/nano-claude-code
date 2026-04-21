@@ -1,0 +1,15 @@
+{
+  "teamName": "dev-team",
+  "members": [
+    {
+      "name": "alice",
+      "role": "senior-coder",
+      "status": "idle"
+    },
+    {
+      "name": "bob",
+      "role": "reviewer",
+      "status": "idle"
+    }
+  ]
+}

@@ -8,7 +8,8 @@ export const TEAM_TOOLS: Anthropic.Tool[] = [
     description:
       "Spawn a persistent named teammate that runs its own agent loop in the background. " +
       "Teammates share the filesystem but have isolated conversation histories. " +
-      "Use this to delegate long-running or parallel subtasks.",
+      "Use this to delegate long-running or parallel subtasks. " +
+      "Results are delivered via read_inbox().",
     input_schema: {
       type: "object" as const,
       properties: {

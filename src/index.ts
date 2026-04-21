@@ -23,7 +23,7 @@ class ClaudeCLI {
   private teamMode: boolean;
 
   constructor(options: { teamMode?: boolean } = {}) {
-    this.teamMode = options.teamMode ?? false;
+    this.teamMode = options.teamMode ?? true;
     this.spinner = new Spinner(this.renderer.getTheme());
     this.input = new InputHandler(this.renderer, this.commands);
 
@@ -201,7 +201,7 @@ program
   .version("1.0.0")
   .option("--team", "启用多 Agent 团队模式（lead + teammates）")
   .action((options) => {
-    const cli = new ClaudeCLI({ teamMode: options.team ?? false });
+    const cli = new ClaudeCLI({ teamMode: options.team ?? true });
     cli.start().catch((err) => {
       console.error(chalk.red("启动失败:"), err.message);
       process.exit(1);
