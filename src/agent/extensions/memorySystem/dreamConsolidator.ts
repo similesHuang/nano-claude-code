@@ -163,7 +163,7 @@ export class DreamConsolidator {
 
     // Gate 7: PID 锁（检查团队和个人目录，无其他进程在整理）
     if (!teamHasFiles || !privateHasFiles) {
-      // 只有有文件的目录才需要检查锁
+      // 只有有文件的目录才需要检查锁，避免无文件目录的锁干扰整理
       const teamLocked = teamHasFiles && !(await this.acquireLock(this.teamMemoryDir, this.teamLockFile));
       const privateLocked = privateHasFiles && !(await this.acquireLock(this.privateMemoryDir, this.privateLockFile));
 
@@ -443,7 +443,7 @@ export class DreamConsolidator {
     return log;
   }
 
-  // -- PID 锁 --
+  // -- PID 锁： 做到多进程互斥 --
 
   private async acquireLock(dir: string, lockFile: string): Promise<boolean> {
     const now = Date.now() / 1000;
@@ -483,6 +483,7 @@ export class DreamConsolidator {
     }
   }
 
+  // 释放锁
   private async releaseLock(_dir: string, lockFile: string): Promise<void> {
     try {
       const lockData = await fs.readFile(lockFile, "utf-8");
