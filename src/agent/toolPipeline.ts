@@ -25,7 +25,6 @@ export class ToolPipeline {
    */
   async executeAll(
     content: Array<Anthropic.ContentBlock>,
-    runSubAgent: (prompt: string) => Promise<string>,
   ): Promise<{
     results: ToolExecutionResult[];
     manualCompact: boolean;
@@ -54,7 +53,7 @@ export class ToolPipeline {
       }
 
       try {
-        const result = await this.executeSingle(block, runSubAgent);
+        const result = await this.executeSingle(block);
         results.push(result);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -75,7 +74,6 @@ export class ToolPipeline {
    */
   private async executeSingle(
     block: Anthropic.ToolUseBlock,
-    runSubAgent: (prompt: string) => Promise<string>,
   ): Promise<ToolExecutionResult> {
     let toolInput = (block.input as Record<string, any>) ?? {};
 
@@ -101,7 +99,7 @@ export class ToolPipeline {
 
     // ── 权限管线 ──
     const { output, isError } = await this.checkPermissionAndRun(
-      block.name, toolInput, runSubAgent,
+      block.name, toolInput,
     );
 
     // ── PostToolUse hooks ──
@@ -131,7 +129,6 @@ export class ToolPipeline {
   private async checkPermissionAndRun(
     name: string,
     toolInput: Record<string, any>,
-    runSubAgent: (prompt: string) => Promise<string>,
   ): Promise<ToolOutput> {
     const decision = this.permissionManager.check(name, toolInput);
 
@@ -145,12 +142,12 @@ export class ToolPipeline {
 
       if (answer === "always") {
         this.permissionManager.addAlwaysAllow(name);
-        return this.invokeHandler(name, toolInput, runSubAgent);
+        return this.invokeHandler(name, toolInput);
       }
 
       if (answer === "y") {
         this.permissionManager.recordApproval();
-        return this.invokeHandler(name, toolInput, runSubAgent);
+        return this.invokeHandler(name, toolInput);
       }
 
       // 用户拒绝
@@ -163,25 +160,17 @@ export class ToolPipeline {
     }
 
     // allow
-    return this.invokeHandler(name, toolInput, runSubAgent);
+    return this.invokeHandler(name, toolInput);
   }
 
   /**
-   * 调用处理器（subagent 走子代理，其余走 ToolRegistry）
+   * 调用处理器
    */
   private async invokeHandler(
     name: string,
     toolInput: Record<string, any>,
-    runSubAgent: (prompt: string) => Promise<string>,
   ): Promise<ToolOutput> {
     this.callbacks.onToolCall?.(name, toolInput);
-
-    if (name === "subagent") {
-      const { prompt } = toolInput as { prompt: string };
-      const result = await runSubAgent(prompt);
-      return { output: result, isError: false };
-    }
-
     return this.toolRegistry.execute(name, toolInput);
   }
 }

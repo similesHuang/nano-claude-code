@@ -4,9 +4,11 @@ import type { TaskManager } from "../taskRuntime/taskManager.js";
 import type { SkillsSystem } from "../systems/skillsSystem.js";
 import type { MemorySystem } from "../extensions/memorySystem/memorySystem.js";
 import type { AsyncTask } from "../taskRuntime/asyncTask.js";
+import type { TeammateManager } from "../multiAgent/teammateManager.js";
+import type { MessageBus } from "../multiAgent/messageBus.js";
 import type { ToolOutput } from "../types.js";
 
-export { TOOLS, SUBAGENT_TOOL } from "./schemas.js";
+export { TOOLS, TEAM_TOOLS } from "./schemas.js";
 
 /**
  * 工具依赖注入接口
@@ -16,6 +18,9 @@ export interface ToolDeps {
   skillsSystem: SkillsSystem;
   memorySystem: MemorySystem;
   asyncTask: AsyncTask;
+  /** 可选：团队模式依赖，不启用时为 undefined */
+  teammateManager?: TeammateManager;
+  messageBus?: MessageBus;
 }
 
 /**
@@ -27,7 +32,7 @@ export interface ToolDeps {
 export class ToolRegistry {
   private handlers: Record<string, (input: any) => Promise<ToolOutput>>;
 
-  constructor(private deps: ToolDeps) {
+  constructor(deps: ToolDeps) {
     this.handlers = {
       bash: async (input) => this.ok(await runBash(input.command)),
       read_file: async (input) => this.ok(await runRead(input.path, input.limit)),
@@ -50,6 +55,28 @@ export class ToolRegistry {
         ),
       background_run: async (input) => this.ok(deps.asyncTask.run(input.command)),
       check_background: async (input) => this.ok(deps.asyncTask.check(input.task_id)),
+
+      // ── 团队工具（仅主代理注册，deps 不存在时降级报错） ──
+      spawn_teammate: async (input) => {
+        if (!deps.teammateManager) return this.err("Team mode not enabled");
+        return this.ok(deps.teammateManager.spawn(input.name, input.role, input.prompt));
+      },
+      list_teammates: async () => {
+        if (!deps.teammateManager) return this.err("Team mode not enabled");
+        return this.ok(deps.teammateManager.listAll());
+      },
+      send_message: async (input) => {
+        if (!deps.messageBus) return this.err("Team mode not enabled");
+        return this.ok(deps.messageBus.send("lead", input.to, input.content, input.msg_type));
+      },
+      read_inbox: async () => {
+        if (!deps.messageBus) return this.err("Team mode not enabled");
+        return this.ok(JSON.stringify(deps.messageBus.readInbox("lead"), null, 2));
+      },
+      broadcast: async (input) => {
+        if (!deps.messageBus || !deps.teammateManager) return this.err("Team mode not enabled");
+        return this.ok(deps.messageBus.broadcast("lead", input.content, deps.teammateManager.memberNames()));
+      },
     };
   }
 
@@ -74,4 +101,9 @@ export class ToolRegistry {
   private ok(output: string): ToolOutput {
     return { output, isError: output.startsWith("Error:") };
   }
+
+  private err(msg: string): ToolOutput {
+    return { output: `Error: ${msg}`, isError: true };
+  }
 }
+

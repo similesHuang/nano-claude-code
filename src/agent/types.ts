@@ -18,9 +18,10 @@ export interface AgentConfig {
   maxTokens?: number;
   temperature?: number;
   maxIterations?: number;
-  isSubAgent?: boolean;
   compact?: CompactConfig;
   permissionMode?: PermissionMode;
+  /** 启用多 Agent 团队模式，主代理变为 lead，可 spawn/communicate teammates */
+  teamMode?: boolean;
 }
 
 /**

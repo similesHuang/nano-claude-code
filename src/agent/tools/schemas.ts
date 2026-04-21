@@ -1,25 +1,65 @@
 import type Anthropic from "@anthropic-ai/sdk";
 /**
- * subagent 工具定义 - 只在主代理中注册
+ * 多 Agent 团队工具定义 - 只在主代理（lead）中注册
  */
-export const SUBAGENT_TOOL: Anthropic.Tool = {
-  name: "subagent",
-  description: "Spawn a subagent with fresh context to handle a subtask. The subagent shares the filesystem but has its own isolated conversation history. Use this to delegate complex or independent subtasks.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      prompt: {
-        type: "string",
-        description: "The task description for the subagent",
+export const TEAM_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "spawn_teammate",
+    description:
+      "Spawn a persistent named teammate that runs its own agent loop in the background. " +
+      "Teammates share the filesystem but have isolated conversation histories. " +
+      "Use this to delegate long-running or parallel subtasks.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "Unique teammate name (e.g. 'alice', 'coder')" },
+        role: { type: "string", description: "Teammate role description (e.g. 'senior coder')" },
+        prompt: { type: "string", description: "Initial task prompt for the teammate" },
       },
-      description: {
-        type: "string",
-        description: "Brief description of the subtask",
-      },
+      required: ["name", "role", "prompt"],
     },
-    required: ["prompt"],
   },
-};
+  {
+    name: "list_teammates",
+    description: "List all teammates with their name, role, and current status.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "send_message",
+    description: "Send a message to a teammate's inbox.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        to: { type: "string", description: "Teammate name" },
+        content: { type: "string", description: "Message content" },
+        msg_type: {
+          type: "string",
+          enum: ["message", "broadcast", "shutdown_request", "shutdown_response"],
+          description: "Message type",
+        },
+      },
+      required: ["to", "content"],
+    },
+  },
+  {
+    name: "read_inbox",
+    description: "Read and drain the lead's own inbox (messages from teammates).",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "broadcast",
+    description: "Send a message to all teammates simultaneously.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        content: { type: "string", description: "Message to broadcast" },
+      },
+      required: ["content"],
+    },
+  },
+];
+
+
 /**
  * 工具定义数组 - Anthropic API 格式
  * 一眼看到所有可用工具

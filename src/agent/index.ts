@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import * as path from "path";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.js";
-import { SUBAGENT_TOOL, TOOLS, ToolRegistry } from "./tools/index.js";
+import { TOOLS, TEAM_TOOLS, ToolRegistry } from "./tools/index.js";
 import { SkillsSystem, CompactSystem } from "./systems/index.js";
 import { TaskManager } from "./taskRuntime/taskManager.js";
 import { AsyncTask } from "./taskRuntime/asyncTask.js";
@@ -10,6 +10,8 @@ import { SystemPromptBuilder } from "./extensions/systemPromptBuilder.js";
 import { PATHS } from "../config/paths.js";
 import type { PermissionMode } from "./extensions/permissionManager.js";
 import { ToolPipeline } from "./toolPipeline.js";
+import { MessageBus } from "./multiAgent/messageBus.js";
+import { TeammateManager } from "./multiAgent/teammateManager.js";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -25,13 +27,16 @@ export class AgentLoop {
   private maxTokens: number;
   private temperature: number;
   private maxIterations: number;
-  private isSubAgent: boolean;
   private callbacks: AgentCallbacks;
   private messages: Anthropic.MessageParam[] = [];
   private tools: Anthropic.Tool[];
   private skillsInitialized: boolean = false;
   private currentStream: any = null;
   private aborted = false;
+
+  // ── 团队模式（可选） ──
+  private messageBus?: MessageBus;
+  private teammateManager?: TeammateManager;
 
   // ── 子系统（实例级，非全局单例） ──
   private compactSystem: CompactSystem;
@@ -49,10 +54,9 @@ export class AgentLoop {
 
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
-    this.isSubAgent = config.isSubAgent ?? false;
     this.maxTokens = config.maxTokens || 8000;
     this.temperature = config.temperature ?? 0.7;
-    this.maxIterations = config.maxIterations || (this.isSubAgent ? 30 : 50);
+    this.maxIterations = config.maxIterations || 50;
     this.callbacks = callbacks;
 
     // 初始化 Anthropic 客户端
@@ -82,6 +86,27 @@ export class AgentLoop {
       asyncTask: this.asyncTask,
     });
 
+    // ── 团队模式初始化（仅主代理） ──
+    if (config.teamMode) {
+      const cwd = process.cwd();
+      this.messageBus = new MessageBus(PATHS.teamInbox(cwd));
+      this.teammateManager = new TeammateManager(
+        PATHS.teamDir(cwd),
+        this.messageBus,
+        this.client,
+        this.model,
+      );
+      // 重新构建 registry，注入团队依赖
+      this.toolRegistry = new ToolRegistry({
+        taskManager: this.taskManager,
+        skillsSystem: this.skillsSystem,
+        memorySystem: this.memorySystem,
+        asyncTask: this.asyncTask,
+        teammateManager: this.teammateManager,
+        messageBus: this.messageBus,
+      });
+    }
+
     this.toolPipeline = new ToolPipeline(
       this.toolRegistry,
       this.permissionManager,
@@ -93,14 +118,14 @@ export class AgentLoop {
     this.promptBuilder = new SystemPromptBuilder({
       memorySystem: this.memorySystem,
       skillsSystem: this.skillsSystem,
+      teamMode:  config.teamMode ?? false,
     });
     this.errorRecovery = new ErrorRecovery();
-    this.systemPrompt = this.isSubAgent
-      ? this.promptBuilder.buildForSubAgent()
-      : this.promptBuilder.build();
+    this.systemPrompt = this.promptBuilder.build();
 
-    // 构建工具列表：子代理不需要 subagent 工具（避免无限递归）
-    this.tools = this.isSubAgent ? [...TOOLS] : [...TOOLS, SUBAGENT_TOOL];
+    this.tools = config.teamMode
+        ? [...TOOLS, ...TEAM_TOOLS]
+        : [...TOOLS];
   }
 
   /**
@@ -110,7 +135,7 @@ export class AgentLoop {
     this.aborted = false;
 
     // 首次运行时初始化 hook 系统和技能系统
-    if (!this.isSubAgent && !this.skillsInitialized) {
+    if (!this.skillsInitialized) {
       this.skillsInitialized = true;
       await this.hookManager.init();
       await this.hookManager.runHooks("SessionStart", { tool_name: "", tool_input: {} });
@@ -130,9 +155,7 @@ export class AgentLoop {
       this.memorySystem.restoreMemories();
     }
 
-    this.systemPrompt = this.isSubAgent
-      ? this.promptBuilder.buildForSubAgent()
-      : this.promptBuilder.build();
+    this.systemPrompt = this.promptBuilder.build();
 
     this.messages.push({
       role: "user",
@@ -184,6 +207,17 @@ export class AgentLoop {
             });
           }
 
+          // 团队模式：注入 lead 收件箱里来自 teammates 的消息
+          if (this.messageBus) {
+            const inbox = this.messageBus.readInbox("lead");
+            if (inbox.length > 0) {
+              this.messages.push({
+                role: "user",
+                content: `<inbox>\n${JSON.stringify(inbox, null, 2)}\n</inbox>`,
+              });
+            }
+          }
+
           const stream = this.client.messages.stream({
             model: this.model,
             system: this.systemPrompt,
@@ -231,7 +265,6 @@ export class AgentLoop {
         const { results, manualCompact, compactFocus } =
           await this.toolPipeline.executeAll(
             response.content,
-            (prompt) => this.runSubAgent(prompt),
           );
 
         this.messages.push({
@@ -316,22 +349,6 @@ export class AgentLoop {
       .catch(() => {});
   }
 
-  /**
-   * 派发子代理 — 独立实例，不共享 taskManager/skillsSystem/memory
-   */
-  private async runSubAgent(prompt: string): Promise<string> {
-    const subAgent = new AgentLoop(
-      {
-        model: this.model,
-        apiKey: undefined,
-        maxTokens: this.maxTokens,
-        isSubAgent: true,
-      },
-      {} // 子代理不需要回调
-    );
-
-    return subAgent.run(prompt);
-  }
 
   private createErrorToolResults(
     content: Array<Anthropic.ContentBlock>,
@@ -396,9 +413,7 @@ export class AgentLoop {
     if (this.memorySystem.isSuppressed()) {
       this.memorySystem.restoreMemories();
     }
-    this.systemPrompt = this.isSubAgent
-      ? this.promptBuilder.buildForSubAgent()
-      : this.promptBuilder.build();
+    this.systemPrompt = this.promptBuilder.build();
   }
 
   setPermissionMode(mode: PermissionMode): void {
@@ -409,11 +424,9 @@ export class AgentLoop {
    * 退出时清理资源
    */
   destroy(): void {
-    if (!this.isSubAgent) {
       this.taskManager.pruneCompletedChains();
       this.asyncTask.clearTasksCache();
       this.compactSystem.clearToolResults();
-    }
   }
 
   async compactConversation(focus?: string): Promise<string> {

@@ -30,15 +30,18 @@ export class SystemPromptBuilder {
   private memorySystem: MemorySystem;
   private skillsSystem: SkillsSystem;
   private skillsReady = false;
+  private teamMode = false;
 
   constructor(opts: {
     workdir?: string;
     memorySystem: MemorySystem;
     skillsSystem: SkillsSystem;
+    teamMode?: boolean;
   }) {
     this.workdir = opts.workdir ?? process.cwd();
     this.memorySystem = opts.memorySystem;
     this.skillsSystem = opts.skillsSystem;
+    this.teamMode = opts.teamMode ?? false;
   }
 
   /** 标记 skills 已完成初始化扫描 */
@@ -49,11 +52,6 @@ export class SystemPromptBuilder {
   // ================================================================
   // 主入口
   // ================================================================
-
-  /** 构建子代理提示词（精简） */
-  buildForSubAgent(): string {
-    return `You are a coding subagent at ${this.workdir}. Complete the given task efficiently using available tools. Return only a summary of what you accomplished.`;
-  }
 
   /** 构建主代理提示词（完整流水线） */
   build(): string {
@@ -79,6 +77,9 @@ export class SystemPromptBuilder {
 
     // 6. dynamic context
     sections.push(this.sectionDynamic());
+
+    // 7. team mode (optional)
+    if (this.teamMode) sections.push(this.sectionTeam());
 
     return sections.join("\n\n");
   }
@@ -217,5 +218,32 @@ Platform: ${os.platform()}`;
     } catch {
       return null;
     }
+  }
+
+  /** 段落 7: 团队模式指南 */
+  private sectionTeam(): string {
+    return `---
+
+## Team mode (you are the lead)
+
+You can spawn persistent named teammates and communicate with them via inboxes.
+
+### Tools
+- spawn_teammate(name, role, prompt): start a teammate in the background with a given role and initial task
+- list_teammates: see all teammates and their status (working / idle / shutdown)
+- send_message(to, content, msg_type?): drop a message into a teammate's inbox
+- read_inbox: drain your own inbox — teammates' replies appear here
+- broadcast(content): send a message to all teammates at once
+
+### Workflow
+1. spawn_teammate for each parallel workstream
+2. teammates run independently; they can send_message back to "lead"
+3. call read_inbox to collect results — messages arrive in <inbox> blocks automatically each turn
+4. when a teammate is idle, spawn it again with a new prompt or let it rest
+
+### Rules
+- Only spawn teammates for genuinely parallel or long-running subtasks
+- You (lead) are still responsible for integrating and delivering the final answer
+- Teammates do NOT have access to team tools — they communicate only via inboxes`;
   }
 }
