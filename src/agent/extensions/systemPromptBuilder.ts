@@ -85,20 +85,9 @@ export class SystemPromptBuilder {
   /** 段落 1: 核心行为指令 */
   private sectionCore(): string {
     return `You are a coding agent at ${this.workdir}. Use tools to solve tasks.
-
----
-
-## Task tools (task_create / task_update / task_list / task_get)
-
-For complex multi-step work, use tasks to track progress:
-- task_create: create a task with subject + description
-- task_update: set status=in_progress when you start working, status=completed when done, status=deleted to remove
-- task_update: set addBlockedBy=[id] on a task that must wait for another task
-- task_update: set addBlocks=[id] on a task that blocks another (bidirectional — the blocked task also gets its blockedBy set)
-- task_list: see all tasks at any time; task_get: see full details of one task
-- NEVER mark a task completed before the work is actually done
-
----
+    Prefer task_create/task_update/task_list for multi-step work.
+    Use load_skill for specialized knowledge.
+    Use save_memory to remember insights, preferences, and facts for future turns. 
 `;
   }
 
