@@ -10,8 +10,9 @@ import { SystemPromptBuilder } from "./extensions/systemPromptBuilder.js";
 import { PATHS } from "../config/paths.js";
 import type { PermissionMode } from "./extensions/permissionManager.js";
 import { ToolPipeline } from "./toolPipeline.js";
-import { MessageBus } from "./multiAgent/messageBus.js";
+
 import { TeammateManager } from "./multiAgent/teammateManager.js";
+import { BlackBoard } from "./multiAgent/blackboard.js";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -35,7 +36,7 @@ export class AgentLoop {
   private aborted = false;
 
   // ── 团队模式（可选） ──
-  private messageBus?: MessageBus;
+  private blackBoard?: BlackBoard;
   private teammateManager?: TeammateManager;
 
   // ── 子系统（实例级，非全局单例） ──
@@ -88,10 +89,11 @@ export class AgentLoop {
     // ── 团队模式初始化（仅主代理） ──
     if (config.teamMode) {
       const cwd = process.cwd();
-      this.messageBus = new MessageBus(PATHS.teamInbox(cwd));
+      const taskId = `task-${Date.now()}`;
+      this.blackBoard = new BlackBoard(PATHS.teamDir(cwd), taskId);
       this.teammateManager = new TeammateManager(
         PATHS.teamDir(cwd),
-        this.messageBus,
+        this.blackBoard,
         this.client,
         this.model,
       );
@@ -101,7 +103,7 @@ export class AgentLoop {
       ...baseDeps,
       ...(config.teamMode && {
         teammateManager: this.teammateManager,
-        messageBus: this.messageBus,
+        blackBoard: this.blackBoard,
       }),
     });
 
@@ -116,7 +118,6 @@ export class AgentLoop {
     this.promptBuilder = new SystemPromptBuilder({
       memorySystem: this.memorySystem,
       skillsSystem: this.skillsSystem,
-      teamMode:  config.teamMode ?? false,
     });
     this.errorRecovery = new ErrorRecovery();
     this.systemPrompt = this.promptBuilder.build();
@@ -205,15 +206,13 @@ export class AgentLoop {
             });
           }
 
-          // 团队模式：注入 lead 收件箱里来自 teammates 的消息
-          if (this.messageBus) {
-            const inbox = this.messageBus.readInbox("lead");
-            if (inbox.length > 0) {
-              this.messages.push({
-                role: "user",
-                content: `<inbox>\n${JSON.stringify(inbox, null, 2)}\n</inbox>`,
-              });
-            }
+          // 团队模式：从黑板读取当前阶段状态
+          if (this.blackBoard) {
+            const board = this.blackBoard.read();
+            this.messages.push({
+              role: "user",
+              content: `[stage: ${board.stage}]`,
+            });
           }
 
           const stream = this.client.messages.stream({

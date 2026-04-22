@@ -1,0 +1,13 @@
+{
+  "taskId": "task-1776838172499",
+  "stage": "done",
+  "artifacts": {},
+  "messages": [
+    {
+      "content": "主代理: 启动了 qs-researcher 和 qs-coder 两个子代理来实现快速排序",
+      "sender": "主代理",
+      "timestamp": 1776838172550
+    }
+  ],
+  "timestamp": 1776838329812
+}

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import Anthropic from "@anthropic-ai/sdk";
-import { MessageBus } from "./messageBus.js";
+import { BlackBoard, Stage } from "./blackboard.js";
 import { TOOLS } from "../tools/schemas.js";
 import { runBash } from "../tools/bash.js";
 import { runRead, runWrite, runEdit } from "../tools/file.js";
@@ -23,8 +23,8 @@ interface TeamConfig {
  * TeammateManager — 持久化命名 Agent 的注册与管理
  *
  * 每个 teammate 运行在独立的 Promise 链（模拟线程），
- * 通过 MessageBus JSONL 收件箱通信。
- * config.json 记录所有 member 状态，可跨会话恢复。
+ * 通过 BlackBoard 共享状态协调工作流。
+ * stage 字段驱动生命周期：researching → coding → reviewing → done
  */
 export class TeammateManager {
   private configPath: string;
@@ -33,7 +33,7 @@ export class TeammateManager {
 
   constructor(
     private teamDir: string,
-    private bus: MessageBus,
+    private board: BlackBoard,
     private client: Anthropic,
     private model: string,
   ) {
@@ -55,7 +55,7 @@ export class TeammateManager {
     fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), "utf8");
   }
 
-  private findMember(name: string): TeamMember | undefined {
+  findMember(name: string): TeamMember | undefined {
     return this.config.members.find((m) => m.name === name);
   }
 
@@ -74,10 +74,9 @@ export class TeammateManager {
     }
     this.saveConfig();
 
-    // 每次 spawn 启动一个独立的 async agent loop
     const loop = this.teammateLoop(name, role, prompt);
     this.activeLoops.set(name, loop);
-    loop.catch(() => {}); // prevent unhandled rejection
+    loop.catch(() => {});
 
     return `Spawned '${name}' (role: ${role})`;
   }
@@ -95,7 +94,7 @@ export class TeammateManager {
     return this.config.members.map((m) => m.name);
   }
 
-  // ── Teammate loop (runs in background via Promise) ───────────────
+  // ── Teammate loop (stage-driven, no inbox polling) ────────────────
 
   private async teammateLoop(
     name: string,
@@ -104,7 +103,10 @@ export class TeammateManager {
   ): Promise<void> {
     const sysPrompt =
       `You are '${name}', role: ${role}. ` +
-      `Use send_message to communicate with teammates. Complete your task.`;
+      `Monitor the BlackBoard stage to know when to act. ` +
+      `Use read_board to check current state. ` +
+      `Use write_board to update artifacts. ` +
+      `When stage reaches 'done', your work is complete — stop making tool calls.`;
 
     const messages: Anthropic.MessageParam[] = [
       { role: "user", content: initialPrompt },
@@ -112,11 +114,11 @@ export class TeammateManager {
 
     const tools = this.buildTeammateTools();
 
-    for (let i = 0; i < 50; i++) {
-      // drain inbox into conversation
-      const inbox = this.bus.readInbox(name);
-      for (const msg of inbox) {
-        messages.push({ role: "user", content: JSON.stringify(msg) });
+    while (true) {
+      // 检查 stage 是否已结束
+      const stage = this.board.peekStage();
+      if (stage === "done") {
+        break;
       }
 
       let response: Anthropic.Message;
@@ -134,7 +136,14 @@ export class TeammateManager {
 
       messages.push({ role: "assistant", content: response.content });
 
-      if (response.stop_reason !== "tool_use") break;
+      if (response.stop_reason !== "tool_use") {
+        // 模型正常结束（无 tool_use），检查是否该退出
+        const finalStage = this.board.peekStage();
+        if (finalStage === "done" || finalStage === undefined) {
+          break;
+        }
+        continue;
+      }
 
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const block of response.content) {
@@ -159,7 +168,7 @@ export class TeammateManager {
   // ── Tool execution inside teammate ───────────────────────────────
 
   private async execTool(
-    senderName: string,
+    _senderName: string,
     toolName: string,
     input: Record<string, any>,
   ): Promise<string> {
@@ -172,45 +181,63 @@ export class TeammateManager {
         return runWrite(input.path, input.content);
       case "edit_file":
         return runEdit(input.path, input.old_text, input.new_text);
-      case "send_message":
-        return this.bus.send(senderName, input.to, input.content, input.msg_type);
-      case "read_inbox":
-        return JSON.stringify(this.bus.readInbox(senderName), null, 2);
+      case "read_board":
+        return JSON.stringify(this.board.read(), null, 2);
+      case "write_board":
+        return JSON.stringify(this.board.write(input.board), null, 2);
+      case "advance_stage": {
+        const current = this.board.peekStage();
+        const next = input.next_stage as Stage;
+        const ok = this.board.compareAndSwapStage(current, next);
+        return JSON.stringify({ success: ok, stage: next });
+      }
       default:
         return `Unknown tool: ${toolName}`;
     }
   }
 
   private buildTeammateTools(): Anthropic.Tool[] {
-    // teammates 使用 base 工具 + 通信工具
     const base = TOOLS.filter((t) =>
       ["bash", "read_file", "write_file", "edit_file"].includes(t.name),
     );
 
-    const commTools: Anthropic.Tool[] = [
+    const boardTools: Anthropic.Tool[] = [
       {
-        name: "send_message",
-        description: "Send a message to a teammate's inbox.",
+        name: "read_board",
+        description: "Read the current BlackBoard state (stage, artifacts, messages).",
+        input_schema: { type: "object" as const, properties: {} },
+      },
+      {
+        name: "write_board",
+        description: "Write the full BlackBoard state.",
         input_schema: {
           type: "object" as const,
           properties: {
-            to: { type: "string", description: "Teammate name" },
-            content: { type: "string", description: "Message content" },
-            msg_type: {
-              type: "string",
-              enum: ["message", "broadcast", "shutdown_request", "shutdown_response"],
+            board: {
+              type: "object",
+              description: "Complete BlackBoard object to write",
             },
           },
-          required: ["to", "content"],
+          required: ["board"],
         },
       },
       {
-        name: "read_inbox",
-        description: "Read and drain your own inbox.",
-        input_schema: { type: "object" as const, properties: {} },
+        name: "advance_stage",
+        description: "Atomically advance the board stage (only if current stage matches expected).",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            next_stage: {
+              type: "string",
+              enum: ["researching", "coding", "reviewing", "done"],
+              description: "The stage to advance to",
+            },
+          },
+          required: ["next_stage"],
+        },
       },
     ];
 
-    return [...base, ...commTools];
+    return [...base, ...boardTools];
   }
 }

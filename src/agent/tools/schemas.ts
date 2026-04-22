@@ -3,13 +3,13 @@ import type Anthropic from "@anthropic-ai/sdk";
  * 多 Agent 团队工具定义 - 只在主代理（lead）中注册
  */
 export const TEAM_TOOLS: Anthropic.Tool[] = [
+  // ── Teammate 管理 ──
   {
     name: "spawn_teammate",
     description:
       "Spawn a persistent named teammate that runs its own agent loop in the background. " +
-      "Teammates share the filesystem but have isolated conversation histories. " +
-      "Use this to delegate long-running or parallel subtasks. " +
-      "Results are delivered via read_inbox().",
+      "Teammates share the BlackBoard for state coordination. " +
+      "Use this to delegate long-running or parallel subtasks.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -26,34 +26,58 @@ export const TEAM_TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object" as const, properties: {} },
   },
   {
-    name: "send_message",
-    description: "Send a message to a teammate's inbox.",
+    name: "shutdown_teammate",
+    description: "Request a teammate to shutdown gracefully.",
     input_schema: {
       type: "object" as const,
       properties: {
-        to: { type: "string", description: "Teammate name" },
-        content: { type: "string", description: "Message content" },
-        msg_type: {
-          type: "string",
-          enum: ["message", "broadcast", "shutdown_request", "shutdown_response"],
-          description: "Message type",
-        },
+        name: { type: "string", description: "Teammate name to shutdown" },
       },
-      required: ["to", "content"],
+      required: ["name"],
     },
   },
+  // ── BlackBoard 状态协作 ──
   {
-    name: "read_inbox",
-    description: "Read and drain the lead's own inbox (messages from teammates).",
+    name: "read_board",
+    description: "Read the current BlackBoard state (stage, artifacts, messages).",
     input_schema: { type: "object" as const, properties: {} },
   },
   {
-    name: "broadcast",
-    description: "Send a message to all teammates simultaneously.",
+    name: "write_board",
+    description: "Write the full BlackBoard state.",
     input_schema: {
       type: "object" as const,
       properties: {
-        content: { type: "string", description: "Message to broadcast" },
+        board: {
+          type: "object",
+          description: "Complete BlackBoard object to write",
+        },
+      },
+      required: ["board"],
+    },
+  },
+  {
+    name: "advance_stage",
+    description: "Atomically advance the board stage (only if current stage matches expected).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        next_stage: {
+          type: "string",
+          enum: ["researching", "coding", "reviewing", "done"],
+          description: "The stage to advance to",
+        },
+      },
+      required: ["next_stage"],
+    },
+  },
+  {
+    name: "append_message",
+    description: "Append a message to the BlackBoard's message log.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        content: { type: "string", description: "Message content to append" },
       },
       required: ["content"],
     },

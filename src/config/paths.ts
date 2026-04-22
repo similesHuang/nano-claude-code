@@ -23,5 +23,4 @@ export const PATHS = {
   taskDir: path.join(getDataDir(), ".tasks"),
   backendTaskDir: path.join(getDataDir(), "backendTaskcache"),
   teamDir: (cwd: string) => path.join(cwd, ".team"),
-  teamInbox: (cwd: string) => path.join(cwd, ".team", "inbox"),
 } as const;

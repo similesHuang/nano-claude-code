@@ -30,18 +30,15 @@ export class SystemPromptBuilder {
   private memorySystem: MemorySystem;
   private skillsSystem: SkillsSystem;
   private skillsReady = false;
-  private teamMode = false;
 
   constructor(opts: {
     workdir?: string;
     memorySystem: MemorySystem;
     skillsSystem: SkillsSystem;
-    teamMode?: boolean;
   }) {
     this.workdir = opts.workdir ?? process.cwd();
     this.memorySystem = opts.memorySystem;
     this.skillsSystem = opts.skillsSystem;
-    this.teamMode = opts.teamMode ?? false;
   }
 
   /** 标记 skills 已完成初始化扫描 */
@@ -78,9 +75,6 @@ export class SystemPromptBuilder {
     // 6. dynamic context
     sections.push(this.sectionDynamic());
 
-    // 7. team mode (optional)
-    if (this.teamMode) sections.push(this.sectionTeam());
-
     return sections.join("\n\n");
   }
 
@@ -90,7 +84,7 @@ export class SystemPromptBuilder {
 
   /** 段落 1: 核心行为指令 */
   private sectionCore(): string {
-    return `You are a coding agent at ${this.workdir}. You can use tools to interact with the system and solve tasks. Act efficiently and explain your reasoning when necessary.
+    return `You are a coding agent at ${this.workdir}. Use tools to solve tasks.
 
 ---
 
@@ -105,25 +99,7 @@ For complex multi-step work, use tasks to track progress:
 - NEVER mark a task completed before the work is actually done
 
 ---
-
-## Background tools (background_run / check_background)
-
-When you need to run a long-running command:
-- background_run: fires the command immediately and returns [bg:taskId]
-- After background_run returns, IMMEDIATELY call check_background with that task_id in the same response turn — do not return the task_id to the user and move on without checking
-- If check_background shows [running], check again until it completes
-- Example: background_run → check_background → use results
-
----
-
-## When to use each tool
-
-- bash / read_file / write_file / edit_file: direct file and shell operations
-- task_* tools: track multi-step work, dependencies, and ownership
-- background_run + check_background: long-running commands that shouldn't block the agent
-- compact: manually compress conversation history when it gets too long
-- load_skill: pull in specialized instructions for a specific domain
-- save_memory: store insights that should survive across sessions`;
+`;
   }
 
   /** 段落 2: 持久化记忆（委托给 MemorySystem） */
@@ -220,30 +196,4 @@ Platform: ${os.platform()}`;
     }
   }
 
-  /** 段落 7: 团队模式指南 */
-  private sectionTeam(): string {
-    return `---
-
-## Team mode (you are the lead)
-
-You can spawn persistent named teammates and communicate with them via inboxes.
-
-### Tools
-- spawn_teammate(name, role, prompt): start a teammate in the background with a given role and initial task
-- list_teammates: see all teammates and their status (working / idle / shutdown)
-- send_message(to, content, msg_type?): drop a message into a teammate's inbox
-- read_inbox: drain your own inbox — teammates' replies appear here
-- broadcast(content): send a message to all teammates at once
-
-### Workflow
-1. spawn_teammate for each parallel workstream
-2. teammates run independently; they can send_message back to "lead"
-3. call read_inbox to collect results — messages arrive in <inbox> blocks automatically each turn
-4. when a teammate is idle, spawn it again with a new prompt or let it rest
-
-### Rules
-- Only spawn teammates for genuinely parallel or long-running subtasks
-- You (lead) are still responsible for integrating and delivering the final answer
-- Teammates do NOT have access to team tools — they communicate only via inboxes`;
   }
-}

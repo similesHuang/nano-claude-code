@@ -5,7 +5,7 @@ import type { SkillsSystem } from "../systems/skillsSystem.js";
 import type { MemorySystem } from "../extensions/memorySystem/memorySystem.js";
 import type { AsyncTask } from "../taskRuntime/asyncTask.js";
 import type { TeammateManager } from "../multiAgent/teammateManager.js";
-import type { MessageBus } from "../multiAgent/messageBus.js";
+import type { BlackBoard } from "../multiAgent/blackboard.js";
 import type { ToolOutput } from "../types.js";
 
 export { TOOLS, TEAM_TOOLS } from "./schemas.js";
@@ -20,7 +20,7 @@ export interface ToolDeps {
   asyncTask: AsyncTask;
   /** 可选：团队模式依赖，不启用时为 undefined */
   teammateManager?: TeammateManager;
-  messageBus?: MessageBus;
+  blackBoard?: BlackBoard;
 }
 
 /**
@@ -65,17 +65,32 @@ export class ToolRegistry {
         if (!deps.teammateManager) return this.err("Team mode not enabled");
         return this.ok(deps.teammateManager.listAll());
       },
-      send_message: async (input) => {
-        if (!deps.messageBus) return this.err("Team mode not enabled");
-        return this.ok(deps.messageBus.send("lead", input.to, input.content, input.msg_type));
+      read_board: async () => {
+        if (!deps.blackBoard) return this.err("Team mode not enabled");
+        return this.ok(JSON.stringify(deps.blackBoard.read(), null, 2));
       },
-      read_inbox: async () => {
-        if (!deps.messageBus) return this.err("Team mode not enabled");
-        return this.ok(JSON.stringify(deps.messageBus.readInbox("lead"), null, 2));
+      write_board: async (input) => {
+        if (!deps.blackBoard) return this.err("Team mode not enabled");
+        deps.blackBoard.write(input.board);
+        return this.ok("Board updated");
       },
-      broadcast: async (input) => {
-        if (!deps.messageBus || !deps.teammateManager) return this.err("Team mode not enabled");
-        return this.ok(deps.messageBus.broadcast("lead", input.content, deps.teammateManager.memberNames()));
+      advance_stage: async (input) => {
+        if (!deps.blackBoard) return this.err("Team mode not enabled");
+        const current = deps.blackBoard.peekStage();
+        const ok = deps.blackBoard.compareAndSwapStage(current, input.next_stage);
+        return this.ok(JSON.stringify({ success: ok, stage: input.next_stage }));
+      },
+      append_message: async (input) => {
+        if (!deps.blackBoard) return this.err("Team mode not enabled");
+        deps.blackBoard.appendMessage("lead", input.content);
+        return this.ok("Message appended");
+      },
+      shutdown_teammate: async (input) => {
+        if (!deps.teammateManager) return this.err("Team mode not enabled");
+        const member = deps.teammateManager.findMember(input.name);
+        if (!member) return this.err(`Teammate '${input.name}' not found`);
+        member.status = "shutdown";
+        return this.ok(`Shutdown request sent to '${input.name}'`);
       },
     };
   }

@@ -1,0 +1,20 @@
+{
+  "artifacts": {
+    "quicksort.ts": {
+      "features": [
+        "原地排序 in-place",
+        "TypeScript 类型注解",
+        "详细中文注释",
+        "默认导出",
+        "额外导出 partition 和 swap 工具函数"
+      ],
+      "path": "/Users/huanghe03/Desktop/技术专项核心套件/nano-claude-code/quicksort.ts"
+    }
+  },
+  "messages": [
+    "快速排序算法实现完成"
+  ],
+  "stage": "done",
+  "taskId": "task-1776837505896",
+  "timestamp": 1776837591196
+}
