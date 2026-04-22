@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import * as path from "path";
 import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.js";
-import { TOOLS, TEAM_TOOLS, ToolRegistry } from "./tools/index.js";
+import { TOOLS, ToolRegistry } from "./tools/index.js";
 import { SkillsSystem, CompactSystem } from "./systems/index.js";
 import { TaskManager } from "./taskRuntime/taskManager.js";
 import { AsyncTask } from "./taskRuntime/asyncTask.js";
@@ -11,8 +11,6 @@ import { PATHS } from "../config/paths.js";
 import type { PermissionMode } from "./extensions/permissionManager.js";
 import { ToolPipeline } from "./toolPipeline.js";
 
-import { TeammateManager } from "./multiAgent/teammateManager.js";
-import { BlackBoard } from "./multiAgent/blackboard.js";
 
 /**
  * AgentLoop - 核心 AI 代理循环
@@ -34,10 +32,6 @@ export class AgentLoop {
   private skillsInitialized: boolean = false;
   private currentStream: any = null;
   private aborted = false;
-
-  // ── 团队模式（可选） ──
-  private blackBoard?: BlackBoard;
-  private teammateManager?: TeammateManager;
 
   // ── 子系统（实例级，非全局单例） ──
   private compactSystem: CompactSystem;
@@ -80,31 +74,11 @@ export class AgentLoop {
     this.skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
     this.asyncTask = new AsyncTask(process.cwd(),PATHS.backendTaskDir);
 
-    const baseDeps = {
+    this.toolRegistry = new ToolRegistry({
       taskManager: this.taskManager,
       skillsSystem: this.skillsSystem,
       memorySystem: this.memorySystem,
       asyncTask: this.asyncTask,
-    };
-    // ── 团队模式初始化（仅主代理） ──
-    if (config.teamMode) {
-      const cwd = process.cwd();
-      const taskId = `task-${Date.now()}`;
-      this.blackBoard = new BlackBoard(PATHS.teamDir(cwd), taskId);
-      this.teammateManager = new TeammateManager(
-        PATHS.teamDir(cwd),
-        this.blackBoard,
-        this.client,
-        this.model,
-      );
-    }
-
-    this.toolRegistry = new ToolRegistry({
-      ...baseDeps,
-      ...(config.teamMode && {
-        teammateManager: this.teammateManager,
-        blackBoard: this.blackBoard,
-      }),
     });
 
     this.toolPipeline = new ToolPipeline(
@@ -122,9 +96,7 @@ export class AgentLoop {
     this.errorRecovery = new ErrorRecovery();
     this.systemPrompt = this.promptBuilder.build();
 
-    this.tools = config.teamMode
-        ? [...TOOLS, ...TEAM_TOOLS]
-        : [...TOOLS];
+    this.tools = [...TOOLS];
   }
 
   /**
@@ -203,15 +175,6 @@ export class AgentLoop {
             this.messages.push({
               role: "user",
               content: `<background-results>\n${notifText}\n</background-results>`,
-            });
-          }
-
-          // 团队模式：从黑板读取当前阶段状态
-          if (this.blackBoard) {
-            const board = this.blackBoard.read();
-            this.messages.push({
-              role: "user",
-              content: `[stage: ${board.stage}]`,
             });
           }
 

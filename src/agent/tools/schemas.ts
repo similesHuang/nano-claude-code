@@ -1,88 +1,4 @@
 import type Anthropic from "@anthropic-ai/sdk";
-/**
- * 多 Agent 团队工具定义 - 只在主代理（lead）中注册
- */
-export const TEAM_TOOLS: Anthropic.Tool[] = [
-  // ── Teammate 管理 ──
-  {
-    name: "spawn_teammate",
-    description:
-      "Spawn a persistent named teammate that runs its own agent loop in the background. " +
-      "Teammates share the BlackBoard for state coordination. " +
-      "Use this to delegate long-running or parallel subtasks.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        name: { type: "string", description: "Unique teammate name (e.g. 'alice', 'coder')" },
-        role: { type: "string", description: "Teammate role description (e.g. 'senior coder')" },
-        prompt: { type: "string", description: "Initial task prompt for the teammate" },
-      },
-      required: ["name", "role", "prompt"],
-    },
-  },
-  {
-    name: "list_teammates",
-    description: "List all teammates with their name, role, and current status.",
-    input_schema: { type: "object" as const, properties: {} },
-  },
-  {
-    name: "shutdown_teammate",
-    description: "Request a teammate to shutdown gracefully.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        name: { type: "string", description: "Teammate name to shutdown" },
-      },
-      required: ["name"],
-    },
-  },
-  // ── BlackBoard 状态协作 ──
-  {
-    name: "read_board",
-    description: "Read the current BlackBoard state (stage, artifacts, messages).",
-    input_schema: { type: "object" as const, properties: {} },
-  },
-  {
-    name: "write_board",
-    description: "Write the full BlackBoard state.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        board: {
-          type: "object",
-          description: "Complete BlackBoard object to write",
-        },
-      },
-      required: ["board"],
-    },
-  },
-  {
-    name: "advance_stage",
-    description: "Atomically advance the board stage (only if current stage matches expected).",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        next_stage: {
-          type: "string",
-          enum: ["researching", "coding", "reviewing", "done"],
-          description: "The stage to advance to",
-        },
-      },
-      required: ["next_stage"],
-    },
-  },
-  {
-    name: "append_message",
-    description: "Append a message to the BlackBoard's message log.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        content: { type: "string", description: "Message content to append" },
-      },
-      required: ["content"],
-    },
-  },
-];
 
 
 /**
@@ -249,7 +165,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "background_run",
-    description: "Run a command in a background thread. Returns [bg:taskId] immediately — after this tool result, immediately call check_background with that task_id (in the same response turn) to get the full output. Do NOT return the task_id to the user and move on; you MUST follow up to retrieve results.",
+    description: "Run command in background thread. Returns task_id immediately.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -263,7 +179,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "check_background",
-    description: "Check background task result. Pass the task_id from background_run to get full stdout/stderr. If task is still running, you will see [running] — wait and check again. Always check immediately after background_run returns.",
+    description: "Check background task status. Omit task_id to list all.",
     input_schema: {
       type: "object" as const,
       properties: {

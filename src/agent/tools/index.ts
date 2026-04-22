@@ -4,11 +4,9 @@ import type { TaskManager } from "../taskRuntime/taskManager.js";
 import type { SkillsSystem } from "../systems/skillsSystem.js";
 import type { MemorySystem } from "../extensions/memorySystem/memorySystem.js";
 import type { AsyncTask } from "../taskRuntime/asyncTask.js";
-import type { TeammateManager } from "../multiAgent/teammateManager.js";
-import type { BlackBoard } from "../multiAgent/blackboard.js";
 import type { ToolOutput } from "../types.js";
 
-export { TOOLS, TEAM_TOOLS } from "./schemas.js";
+export { TOOLS } from "./schemas.js";
 
 /**
  * 工具依赖注入接口
@@ -18,9 +16,6 @@ export interface ToolDeps {
   skillsSystem: SkillsSystem;
   memorySystem: MemorySystem;
   asyncTask: AsyncTask;
-  /** 可选：团队模式依赖，不启用时为 undefined */
-  teammateManager?: TeammateManager;
-  blackBoard?: BlackBoard;
 }
 
 /**
@@ -55,43 +50,6 @@ export class ToolRegistry {
         ),
       background_run: async (input) => this.ok(deps.asyncTask.run(input.command)),
       check_background: async (input) => this.ok(deps.asyncTask.check(input.task_id)),
-
-      // ── 团队工具（仅主代理注册，deps 不存在时降级报错） ──
-      spawn_teammate: async (input) => {
-        if (!deps.teammateManager) return this.err("Team mode not enabled");
-        return this.ok(deps.teammateManager.spawn(input.name, input.role, input.prompt));
-      },
-      list_teammates: async () => {
-        if (!deps.teammateManager) return this.err("Team mode not enabled");
-        return this.ok(deps.teammateManager.listAll());
-      },
-      read_board: async () => {
-        if (!deps.blackBoard) return this.err("Team mode not enabled");
-        return this.ok(JSON.stringify(deps.blackBoard.read(), null, 2));
-      },
-      write_board: async (input) => {
-        if (!deps.blackBoard) return this.err("Team mode not enabled");
-        deps.blackBoard.write(input.board);
-        return this.ok("Board updated");
-      },
-      advance_stage: async (input) => {
-        if (!deps.blackBoard) return this.err("Team mode not enabled");
-        const current = deps.blackBoard.peekStage();
-        const ok = deps.blackBoard.compareAndSwapStage(current, input.next_stage);
-        return this.ok(JSON.stringify({ success: ok, stage: input.next_stage }));
-      },
-      append_message: async (input) => {
-        if (!deps.blackBoard) return this.err("Team mode not enabled");
-        deps.blackBoard.appendMessage("lead", input.content);
-        return this.ok("Message appended");
-      },
-      shutdown_teammate: async (input) => {
-        if (!deps.teammateManager) return this.err("Team mode not enabled");
-        const member = deps.teammateManager.findMember(input.name);
-        if (!member) return this.err(`Teammate '${input.name}' not found`);
-        member.status = "shutdown";
-        return this.ok(`Shutdown request sent to '${input.name}'`);
-      },
     };
   }
 
@@ -121,4 +79,3 @@ export class ToolRegistry {
     return { output: `Error: ${msg}`, isError: true };
   }
 }
-

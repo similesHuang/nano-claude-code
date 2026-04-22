@@ -20,10 +20,8 @@ class ClaudeCLI {
   private permissionMode: PermissionMode = "default";
   private running = false;
   private agent: AgentLoop | null = null;
-  private teamMode: boolean;
 
-  constructor(options: { teamMode?: boolean } = {}) {
-    this.teamMode = options.teamMode ?? true;
+  constructor() {
     this.spinner = new Spinner(this.renderer.getTheme());
     this.input = new InputHandler(this.renderer, this.commands);
 
@@ -180,7 +178,7 @@ class ClaudeCLI {
       },
     };
 
-    const config = { ...agentConfig, permissionMode: this.permissionMode, teamMode: this.teamMode };
+    const config = { ...agentConfig, permissionMode: this.permissionMode };
     this.agent = new AgentLoop(config, callbacks);
     return this.agent;
   }
@@ -199,9 +197,8 @@ program
   .name("nano-claude-code")
   .description("A lightweight Claude AI coding agent")
   .version("1.0.0")
-  .option("--team", "启用多 Agent 团队模式（lead + teammates）")
-  .action((options) => {
-    const cli = new ClaudeCLI({ teamMode: options.team ?? true });
+  .action(() => {
+    const cli = new ClaudeCLI();
     cli.start().catch((err) => {
       console.error(chalk.red("启动失败:"), err.message);
       process.exit(1);

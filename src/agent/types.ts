@@ -20,8 +20,6 @@ export interface AgentConfig {
   maxIterations?: number;
   compact?: CompactConfig;
   permissionMode?: PermissionMode;
-  /** 启用多 Agent 团队模式，主代理变为 lead，可 spawn/communicate teammates */
-  teamMode?: boolean;
 }
 
 /**
