@@ -64,16 +64,7 @@ export class Renderer {
     this.print(`  ${m(parts.join("  ·  "))}`);
   }
 
-  // ── 用户消息 ───────────────────────────────────────
-
-  userMessage(text: string) {
-    const s = this.c("secondary");
-    const m = this.c("muted");
-    this.print("");
-    this.print(`  ${m("▸")} ${s(text)}`);
-    this.print("");
-  }
-
+ 
   // ── Agent 回复（Markdown 渲染） ──────────────────────
 
   response(text: string) {
