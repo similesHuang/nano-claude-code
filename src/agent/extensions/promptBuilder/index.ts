@@ -61,18 +61,16 @@ export class SystemPromptBuilder {
     const mem = this.sectionMemory();
     if (mem) sections.push(mem);
 
-    // 3. memory guide
-    sections.push(this.sectionMemoryGuide());
 
-    // 4. skills
+    // 3. skills
     const skills = this.sectionSkills();
     if (skills) sections.push(skills);
 
-    // 5. CLAUDE.md chain
+    // 4. CLAUDE.md chain
     const claudeMd = this.sectionClaudeMd();
     if (claudeMd) sections.push(claudeMd);
 
-    // 6. dynamic context
+    // 5. dynamic context
     sections.push(this.sectionDynamic());
 
     return sections.join("\n\n");
@@ -94,27 +92,6 @@ export class SystemPromptBuilder {
   /** 段落 2: 持久化记忆（委托给 MemorySystem） */
   private sectionMemory(): string {
     return this.memorySystem.buildPromptSection();
-  }
-
-  /** 段落 3: 记忆使用/存储指导 */
-  private sectionMemoryGuide(): string {
-    return `When to save memories with save_memory tool:
-- User states a preference -> type: user, scope: private
-- User corrects you ("don't do X") -> type: feedback, sentiment: negative
-- User confirms a practice works well -> type: feedback, sentiment: positive
-- You learn a non-obvious project fact -> type: project, scope: team
-- You find an external resource pointer -> type: reference, scope: team
-
-Do NOT save:
-- Code structure derivable from the repo (function signatures, file layout)
-- Ephemeral state (current branch, this week's PRs, today's tasks, commit hashes)
-- Secrets or credentials (API keys, passwords, tokens)
-- If content contains ephemeral details, extract the lasting insight first.
-
-When using memories:
-- Treat them as directional hints, not verified truths.
-- Before recommending a path, function, or URL from memory, re-read/verify it first.
-- If user says "ignore memory" or "don't use memories", treat memory as empty for this turn.`;
   }
 
   /** 段落 4: 技能目录 */

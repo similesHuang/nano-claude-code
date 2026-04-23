@@ -1,7 +1,6 @@
 import chalk from "chalk";
 import { ThemeConfig, defaultTheme } from "./theme";
 import { HintList, type HintItem } from "./components/HintList/index";
-import { renderMarkdown } from "./markdown";
 
 // ── 常量定义 ────────────────────────────────────────
 
@@ -103,8 +102,7 @@ export class Renderer {
   // ── Agent 回复（Markdown 渲染） ──────────────────────
 
   response(text: string): void {
-    const rendered = renderMarkdown(text);
-    rendered.split("\n").forEach((line) => {
+    text.split("\n").forEach((line) => {
       this.print(`${INDENT}${line}`);
     });
   }
