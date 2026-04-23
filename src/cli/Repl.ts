@@ -17,7 +17,7 @@ export class Repl {
     private commands: CommandRegistry,
     private input: InputHandler,
     private agentManager: AgentManager,
-    private spinner: Spinner,
+    private spinner: Spinner
   ) {}
 
   async run(): Promise<void> {
@@ -35,7 +35,7 @@ export class Repl {
 
       if (this.commands.tryExecute(text)) continue;
 
-      if (this.isLegacyCommand(text)) continue;
+      if (this.handleLegacyCommand(text)) continue;
 
       await this.runAgent(text);
     }
@@ -58,29 +58,37 @@ export class Repl {
   private handleInterrupt(): void {
     if (this.running) {
       this.running = false;
-      this.renderer.print("\n" + this.renderer.c("warning")("  (中断)"));
+      this.renderer.print("\n" + this.renderer.getColor("warning")("  (中断)"));
       return;
     }
-    this.agentManager.destroy();
-    process.exit(0);
+    this.exit();
   }
 
   // ── 命令处理 ────────────────────────────────────────
 
-  private isLegacyCommand(text: string): boolean {
+  private handleLegacyCommand(text: string): boolean {
     if (text === "exit" || text === "quit") {
-      this.agentManager.destroy();
-      process.exit(0);
-    }
-    if (text === "help") {
-      this.commands.tryExecute("/help");
+      this.exit();
       return true;
     }
-    if (text === "clear") {
-      this.commands.tryExecute("/clear");
+
+    const commandMap: Record<string, string> = {
+      help: "/help",
+      clear: "/clear",
+    };
+
+    const slashCommand = commandMap[text];
+    if (slashCommand) {
+      this.commands.tryExecute(slashCommand);
       return true;
     }
+
     return false;
+  }
+
+  private exit(): void {
+    this.agentManager.destroy();
+    process.exit(0);
   }
 
   // ── Agent 执行 ───────────────────────────────────────
@@ -95,7 +103,7 @@ export class Repl {
       this.spinner.stop();
 
       if (this.agentManager.isAborted) {
-        this.renderer.print(this.renderer.c("warning")("\n  (已中断)\n"));
+        this.renderer.print(this.renderer.getColor("warning")("\n  (已中断)\n"));
       } else if (response) {
         this.renderer.response(response);
       }

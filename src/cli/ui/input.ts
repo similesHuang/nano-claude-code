@@ -24,12 +24,12 @@ export class InputHandler {
   // 命令补全状态
   private hintMatches: Array<{ name: string; description: string }> = [];
   private hintIndex = 0;
-  private prevHintCount = 0; // 上一次渲染的提示行数，用于清除
+  private prevHintCount = 0;
 
   constructor(renderer: Renderer, commands: CommandRegistry, prompt?: string) {
     this.renderer = renderer;
     this.commands = commands;
-    this.prompt = prompt ?? renderer.c("primary")(">") + " ";
+    this.prompt = prompt ?? renderer.getColor("primary")(">") + " ";
   }
 
   /**
@@ -42,7 +42,7 @@ export class InputHandler {
   /**
    * 初始化终端 raw mode 和 keypress 事件
    */
-  setupTerminal() {
+  setupTerminal(): void {
     if (process.stdin.isTTY) {
       process.stdin.setRawMode?.(true);
     }
@@ -51,7 +51,6 @@ export class InputHandler {
 
   /**
    * 等待一次用户输入提交（Enter 键）
-   * 返回 trimmed 文本
    */
   waitForInput(): Promise<string> {
     this.editor.clear();
@@ -64,34 +63,24 @@ export class InputHandler {
 
         // Ctrl+C → 退出
         if (key.ctrl && key.name === "c") {
-          process.stdin.removeListener("keypress", onKeypress);
+          this.removeKeypressListener(onKeypress);
           this.clearHints();
-          // 清除终端显示的 ^C 并换行
           process.stdout.write("\r\x1b[2K\x1b[J\n");
-          resolve("\x03"); // 特殊退出信号
+          resolve("\x03");
           return;
         }
 
         // Enter（非 Shift）→ 提交
-        const isEnter = key.name === "enter" || key.name === "return" || str === "\r";
-        if (isEnter && !key.shift) {
-          process.stdin.removeListener("keypress", onKeypress);
-
-          // 如果有补全正在选中，先填充命令名
-          if (this.hintMatches.length > 0 && this.hintIndex >= 0) {
-            const selected = this.hintMatches[this.hintIndex];
-            if (selected) {
-              this.editor.clear();
-              for (const ch of selected.name) this.editor.insert(ch);
-            }
-          }
-
+        if (this.isEnterKey(key) && !key.shift) {
+          this.removeKeypressListener(onKeypress);
+          this.acceptSelectedHint();
           this.clearHints();
-          this.renderer.print(""); // 换行
-          const value = this.editor.getValue().trim();
+          this.renderer.print("");
 
-          // 记录历史
-          if (value) this.editor.pushHistory(this.editor.getValue());
+          const value = this.editor.getValue().trim();
+          if (value) {
+            this.editor.pushHistory(this.editor.getValue());
+          }
 
           resolve(value);
           return;
@@ -99,28 +88,15 @@ export class InputHandler {
 
         // Tab → 接受当前补全选中项
         if (key.name === "tab" && this.hintMatches.length > 0) {
-          const selected = this.hintMatches[this.hintIndex];
-          if (selected) {
-            this.editor.clear();
-            for (const ch of (selected.name + " ")) this.editor.insert(ch);
-            this.clearHints();
-            this.renderLine();
-          }
+          this.acceptSelectedHint(true);
+          this.clearHints();
+          this.renderLine();
           return;
         }
 
         // 补全菜单中 ↑↓ 切换选中项
-        if (this.hintMatches.length > 0) {
-          if (key.name === "up") {
-            this.hintIndex = (this.hintIndex - 1 + this.hintMatches.length) % this.hintMatches.length;
-            this.renderWithHints();
-            return;
-          }
-          if (key.name === "down") {
-            this.hintIndex = (this.hintIndex + 1) % this.hintMatches.length;
-            this.renderWithHints();
-            return;
-          }
+        if (this.hintMatches.length > 0 && this.handleHintNavigation(key)) {
+          return;
         }
 
         // Escape → 关闭补全
@@ -149,88 +125,144 @@ export class InputHandler {
     return new Promise<string>((resolve) => {
       const onKeypress = (str: string | undefined) => {
         if (!str) return;
-        const ch = str.toLowerCase();
-        if (validKeys.includes(ch)) {
-          process.stdin.removeListener("keypress", onKeypress);
-          resolve(ch);
+        const key = str.toLowerCase();
+        if (validKeys.includes(key)) {
+          this.removeKeypressListener(onKeypress);
+          resolve(key);
         }
       };
       process.stdin.on("keypress", onKeypress);
     });
   }
 
-  // -- 私有方法 --
+  // ── 私有辅助方法 ────────────────────────────────────
 
-  private handleEdit(str: string | undefined, key: any) {
-    // Ctrl+U → 清空
-    if (key.ctrl && key.name === "u") {
-      this.editor.clear();
-      return;
-    }
+  private removeKeypressListener(listener: (...args: any[]) => void): void {
+    process.stdin.removeListener("keypress", listener);
+  }
 
-    // Ctrl+L → 清屏
-    if (key.ctrl && key.name === "l") {
-      process.stdout.write("\x1b[2J");
-      this.renderer.print("");
-      return;
-    }
+  private isEnterKey(key: any): boolean {
+    return key.name === "enter" || key.name === "return";
+  }
 
-    // Ctrl+A → 行首
-    if (key.ctrl && key.name === "a") {
-      this.editor.moveToStart();
-      return;
-    }
-
-    // Ctrl+E → 行尾
-    if (key.ctrl && key.name === "e") {
-      this.editor.moveToEnd();
-      return;
-    }
-
-    // 历史（仅在无补全时）
-    if (this.hintMatches.length === 0) {
-      if (key.name === "up") {
-        const prev = this.editor.prevHistory();
-        if (prev !== null) {
-          this.editor.clear();
-          for (const ch of prev) this.editor.insert(ch);
-        }
-        return;
+  private acceptSelectedHint(addSpace = false): void {
+    if (this.hintMatches.length > 0 && this.hintIndex >= 0) {
+      const selected = this.hintMatches[this.hintIndex];
+      if (selected) {
+        this.replaceEditorContent(selected.name + (addSpace ? " " : ""));
       }
-      if (key.name === "down") {
-        const next = this.editor.nextHistory();
-        if (next !== null) {
-          this.editor.clear();
-          for (const ch of next) this.editor.insert(ch);
-        }
-        return;
-      }
+    }
+  }
+
+  private replaceEditorContent(text: string): void {
+    this.editor.clear();
+    for (const char of text) {
+      this.editor.insert(char);
+    }
+  }
+
+  private handleHintNavigation(key: any): boolean {
+    if (key.name === "up") {
+      this.hintIndex = (this.hintIndex - 1 + this.hintMatches.length) % this.hintMatches.length;
+      this.renderWithHints();
+      return true;
+    }
+    if (key.name === "down") {
+      this.hintIndex = (this.hintIndex + 1) % this.hintMatches.length;
+      this.renderWithHints();
+      return true;
+    }
+    return false;
+  }
+
+  private handleEdit(str: string | undefined, key: any): void {
+    // 快捷键处理
+    if (key.ctrl) {
+      this.handleCtrlKey(key);
+      return;
+    }
+
+    // 历史导航（仅在无补全时）
+    if (this.hintMatches.length === 0 && this.handleHistoryNavigation(key)) {
+      return;
     }
 
     // 方向键
-    if (key.name === "left") { this.editor.moveCursorLeft(); return; }
-    if (key.name === "right") { this.editor.moveCursorRight(); return; }
+    if (key.name === "left") {
+      this.editor.moveCursorLeft();
+      return;
+    }
+    if (key.name === "right") {
+      this.editor.moveCursorRight();
+      return;
+    }
 
     // 删除
-    if (key.name === "backspace") { this.editor.delete(); return; }
-    if (key.name === "delete") { this.editor.deleteForward(); return; }
+    if (key.name === "backspace") {
+      this.editor.delete();
+      return;
+    }
+    if (key.name === "delete") {
+      this.editor.deleteForward();
+      return;
+    }
 
     // Shift+Enter → 换行
-    if (key.shift && (key.name === "enter" || key.name === "return")) {
+    if (key.shift && this.isEnterKey(key)) {
       this.editor.insert("\n");
       return;
     }
 
     // 普通字符
-    if (str && !key.ctrl && !key.meta) {
+    if (str && !key.meta) {
       this.editor.insert(str);
     }
   }
 
-  private updateHints() {
-    const buf = this.editor.getValue();
-    if (buf.startsWith("/") && !buf.includes(" ")) {
-      this.hintMatches = this.commands.getCompletions(buf);
+  private handleCtrlKey(key: any): void {
+    switch (key.name) {
+      case "u":
+        this.editor.clear();
+        break;
+      case "l":
+        process.stdout.write("\x1b[2J");
+        this.renderer.print("");
+        break;
+      case "a":
+        this.editor.moveToStart();
+        break;
+      case "e":
+        this.editor.moveToEnd();
+        break;
+    }
+  }
+
+  private handleHistoryNavigation(key: any): boolean {
+    if (key.name === "up") {
+      const prev = this.editor.prevHistory();
+      if (prev !== null) {
+        this.replaceEditorContent(prev);
+      }
+      return true;
+    }
+    if (key.name === "down") {
+      const next = this.editor.nextHistory();
+      if (next !== null) {
+        this.replaceEditorContent(next);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private updateHints(): void {
+    const buffer = this.editor.getValue();
+    // 只要输入 / 就显示所有命令
+    if (buffer === "/") {
+      this.hintMatches = this.commands.getAll().map((cmd) => ({
+        name: cmd.name,
+        description: cmd.description,
+      }));
       this.hintIndex = 0;
     } else {
       this.hintMatches = [];
@@ -238,22 +270,23 @@ export class InputHandler {
     }
   }
 
-  private renderLine() {
-    const buf = this.editor.getValue();
+  private renderLine(): void {
+    const buffer = this.editor.getValue();
     const cursor = this.editor.getCursorPos();
-    const before = buf.slice(0, cursor);
-    const after = buf.slice(cursor);
-    const neutral = this.renderer.c("neutral");
+    const before = buffer.slice(0, cursor);
+    const after = buffer.slice(cursor);
+    const neutral = this.renderer.getColor("neutral");
+
     process.stdout.write(`\r\x1b[2K${this.prompt}${neutral(before)}${chalk.dim(after)}`);
   }
 
-  private renderWithHints() {
+  private renderWithHints(): void {
     if (this.hintMatches.length > 0) {
       this.renderer.commandHints(
         this.hintMatches,
         this.hintIndex,
         this.editor.getValue(),
-        this.prompt,
+        this.prompt
       );
       this.prevHintCount = this.hintMatches.length;
     } else {
@@ -262,7 +295,7 @@ export class InputHandler {
     }
   }
 
-  private clearHints() {
+  private clearHints(): void {
     if (this.prevHintCount > 0) {
       this.renderer.clearHints(this.prevHintCount);
       this.prevHintCount = 0;

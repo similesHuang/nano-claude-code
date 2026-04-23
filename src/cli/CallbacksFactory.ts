@@ -12,7 +12,7 @@ export class CallbacksFactory {
   constructor(
     private spinner: Spinner,
     private renderer: Renderer,
-    private input: InputHandler,
+    private input: InputHandler
   ) {}
 
   create(): AgentCallbacks {
@@ -30,13 +30,8 @@ export class CallbacksFactory {
   private handleToolCall(name: string, toolInput: any): void {
     this.spinner.stop();
 
-    if (name === "load_skill") {
-      const skillName = toolInput?.name || "unknown";
-      this.renderer.skillLoad(skillName, true);
-    } else {
-      const summary = this.renderer.formatToolSummary(name, toolInput);
-      this.renderer.toolCall(name, summary);
-    }
+    const summary = this.renderer.formatToolSummary(name, toolInput);
+    this.renderer.toolCall(name, summary);
 
     this.spinner.start("执行中");
   }
@@ -61,14 +56,15 @@ export class CallbacksFactory {
   private async handlePermissionAsk(
     name: string,
     toolInput: any,
-    reason: string,
+    reason: string
   ): Promise<"y" | "n" | "always"> {
     this.spinner.stop();
     this.renderer.permissionAsk(name, toolInput, reason);
     this.renderer.permissionPrompt();
 
-    const ch = await this.input.waitForKey(["y", "n", "a"]);
-    const answer = ch === "a" ? "always" : ch === "y" ? "y" : "n";
+    const key = await this.input.waitForKey(["y", "n", "a"]);
+    const answer = key === "a" ? "always" : key === "y" ? "y" : "n";
+
     this.renderer.print(answer);
     this.spinner.start("执行中");
 

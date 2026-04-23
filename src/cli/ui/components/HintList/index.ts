@@ -1,6 +1,8 @@
 import chalk from "chalk";
 import { ThemeConfig } from "../../theme/index";
 
+// ── 类型定义 ────────────────────────────────────────
+
 export interface HintItem {
   name: string;
   description?: string;
@@ -11,44 +13,60 @@ export interface HintListOptions {
   maxItems?: number;
 }
 
+// ── 常量定义 ────────────────────────────────────────
+
+const DEFAULT_MAX_ITEMS = 6;
+const SELECTED_PREFIX = "›";
+const UNSELECTED_PREFIX = " ";
+const INDENT = "  ";
+
+type ChalkFunction = typeof chalk;
+
 /**
  * HintList 组件 - 命令补全列表
  */
 export class HintList {
-  private items: HintItem[] = [];
-  private options: Required<HintListOptions>;
-  private theme: ThemeConfig;
+  private readonly items: HintItem[];
+  private readonly options: Required<HintListOptions>;
+  private readonly theme: ThemeConfig;
 
-  constructor(items: HintItem[] = [], options: HintListOptions = {}, theme: ThemeConfig) {
+  constructor(
+    items: HintItem[] = [],
+    options: HintListOptions = {},
+    theme: ThemeConfig
+  ) {
     this.items = items;
     this.theme = theme;
     this.options = {
       selectedIndex: options.selectedIndex ?? 0,
-      maxItems: options.maxItems ?? 6,
+      maxItems: options.maxItems ?? DEFAULT_MAX_ITEMS,
     };
   }
 
-  private c(name: keyof ThemeConfig["colors"]): any {
-    return (chalk as any)[this.theme.colors[name]] || chalk.white;
+  /** 获取主题颜色对应的 chalk 函数 */
+  private color(name: keyof ThemeConfig["colors"]): ChalkFunction {
+    const colorName = this.theme.colors[name];
+    return (chalk as unknown as Record<string, ChalkFunction>)[colorName] ?? chalk.white;
   }
 
   private formatItem(item: HintItem, isSelected: boolean): string {
-    const prefix = isSelected ? "›" : " ";
-    let line = `  ${prefix} ${this.c("neutral")(item.name)}`;
+    const prefix = isSelected ? SELECTED_PREFIX : UNSELECTED_PREFIX;
+    const neutral = this.color("neutral");
+    const muted = this.color("muted");
+
+    let line = `${INDENT}${prefix} ${neutral(item.name)}`;
 
     if (item.description) {
-      line += `  ${this.c("muted")(item.description)}`;
+      line += `  ${muted(item.description)}`;
     }
 
-    return isSelected
-      ? this.c("primary")(line)
-      : line;
+    return isSelected ? this.color("primary")(line) : line;
   }
 
   render(): string[] {
-    const visible = this.items.slice(0, this.options.maxItems);
-    return visible.map((item, i) =>
-      this.formatItem(item, i === this.options.selectedIndex)
+    const visibleItems = this.items.slice(0, this.options.maxItems);
+    return visibleItems.map((item, index) =>
+      this.formatItem(item, index === this.options.selectedIndex)
     );
   }
 }

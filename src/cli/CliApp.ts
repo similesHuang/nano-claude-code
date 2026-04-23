@@ -35,7 +35,7 @@ export class CliApp {
     this.input.setupTerminal();
     this.setupSignalHandler();
 
-    this.agentManager.createAgent(this.callbacksFactory.create());
+    this.agentManager.createAgent(this.callbacksFactory.create(), this.permissionMode);
     this.renderer.banner();
 
     await this.repl.run();
@@ -54,14 +54,14 @@ export class CliApp {
       onExit: () => this.exit(),
       onClear: () => {
         this.agentManager.clearConversation();
-        this.renderer.print(this.renderer.c("muted")("  对话已清空\n"));
+        this.renderer.print(this.renderer.getColor("muted")("  对话已清空\n"));
       },
       onCompact: async (focus?: string) => {
         this.spinner.start("压缩中");
         try {
           const msg = await this.agentManager.compactConversation(focus);
           this.spinner.stop();
-          this.renderer.print(this.renderer.c("muted")(`  ${msg} (focus: ${focus})\n`));
+          this.renderer.print(this.renderer.getColor("muted")(`  ${msg} (focus: ${focus})\n`));
         } catch (err) {
           this.spinner.stop();
           this.renderer.error(`压缩失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -82,7 +82,7 @@ export class CliApp {
 
   private exit(): void {
     this.agentManager.destroy();
-    this.renderer.print(this.renderer.c("muted")("\n  👋 再见!\n"));
+    this.renderer.print(this.renderer.getColor("muted")("\n  👋 再见!\n"));
     process.stdout.write("\x1b[?25h");
     process.exit(0);
   }

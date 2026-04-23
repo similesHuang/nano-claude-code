@@ -8,14 +8,12 @@ import { agentConfig } from "../config/index.js";
  */
 export class AgentManager {
   private agent: AgentLoop | null = null;
-  private readonly permissionMode: PermissionMode = "default";
-  private onAbort?: () => void;
 
-  createAgent(callbacks: AgentCallbacks): AgentLoop {
-    if (this.agent) return this.agent;
-
-    const config = { ...agentConfig, permissionMode: this.permissionMode };
-    this.agent = new AgentLoop(config, callbacks);
+  createAgent(callbacks: AgentCallbacks, permissionMode: PermissionMode = "default"): AgentLoop {
+    if (!this.agent) {
+      const config = { ...agentConfig, permissionMode };
+      this.agent = new AgentLoop(config, callbacks);
+    }
     return this.agent;
   }
 
@@ -28,7 +26,6 @@ export class AgentManager {
 
   abort(): void {
     this.agent?.control.abort();
-    this.onAbort?.();
   }
 
   destroy(): void {
@@ -52,9 +49,5 @@ export class AgentManager {
 
   get isAborted(): boolean {
     return this.agent?.control.isAborted ?? false;
-  }
-
-  set onAbortCallback(cb: () => void) {
-    this.onAbort = cb;
   }
 }
