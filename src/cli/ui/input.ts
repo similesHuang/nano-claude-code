@@ -47,10 +47,6 @@ export class InputHandler {
       process.stdin.setRawMode?.(true);
     }
     readline.emitKeypressEvents(process.stdin);
-
-    process.on("exit", () => {
-      process.stdout.write("\x1b[?25h"); // cursorShow
-    });
   }
 
   /**
@@ -70,6 +66,8 @@ export class InputHandler {
         if (key.ctrl && key.name === "c") {
           process.stdin.removeListener("keypress", onKeypress);
           this.clearHints();
+          // 清除终端显示的 ^C 并换行
+          process.stdout.write("\r\x1b[2K\x1b[J\n");
           resolve("\x03"); // 特殊退出信号
           return;
         }

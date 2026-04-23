@@ -62,9 +62,9 @@ export class CliApp {
           const msg = await this.agentManager.compactConversation(focus);
           this.spinner.stop();
           this.renderer.print(this.renderer.c("muted")(`  ${msg} (focus: ${focus})\n`));
-        } catch {
+        } catch (err) {
           this.spinner.stop();
-          this.renderer.error("压缩失败");
+          this.renderer.error(`压缩失败: ${err instanceof Error ? err.message : String(err)}`);
         }
       },
     });

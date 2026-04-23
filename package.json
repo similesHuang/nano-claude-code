@@ -27,6 +27,7 @@
   "homepage": "https://github.com/similesHuang/nano-claude-code#readme",
   "devDependencies": {
     "@types/async-lock": "^1.4.2",
+    "@types/highlight.js": "^9.12.4",
     "@types/inquirer": "^9.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.19.37",
@@ -39,7 +40,9 @@
     "chalk": "^5.0.0",
     "commander": "^12.0.0",
     "dotenv": "^17.3.1",
+    "highlight.js": "^11.11.1",
     "inquirer": "^9.0.0",
+    "marked": "^18.0.2",
     "minimatch": "^10.2.5"
   },
   "engines": {
