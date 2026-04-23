@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { PermissionMode } from "./extensions/permissionManager";
+import type { PermissionMode } from "../extensions/permission/index";
 
 export interface CompactConfig {
   contextLimit?: number;

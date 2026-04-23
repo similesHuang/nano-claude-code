@@ -1,9 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { ToolExecutionResult, ToolOutput, AgentCallbacks } from "./types.js";
+import type { ToolExecutionResult, ToolOutput, AgentCallbacks } from "./core/types.js";
 import type { ToolRegistry } from "./tools/index.js";
-import type { PermissionManager } from "./extensions/permissionManager.js";
-import type { HookManager } from "./extensions/hookManager.js";
-import type { CompactSystem } from "./systems/compactSystem.js";
+import type { PermissionManager } from "./extensions/permission/index.js";
+import type { HookManager } from "./extensions/hooks/index.js";
+import type { CompactSystem } from "./extensions/compact/index.js";
 
 /**
  * ToolPipeline - 工具执行管线

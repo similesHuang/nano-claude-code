@@ -1,0 +1,60 @@
+import { AgentLoop } from "../agent/index.js";
+import type { AgentCallbacks } from "../agent/index.js";
+import type { PermissionMode } from "../agent/extensions/index.js";
+import { agentConfig } from "../config/index.js";
+
+/**
+ * AgentManager - Agent 生命周期管理
+ */
+export class AgentManager {
+  private agent: AgentLoop | null = null;
+  private readonly permissionMode: PermissionMode = "default";
+  private onAbort?: () => void;
+
+  createAgent(callbacks: AgentCallbacks): AgentLoop {
+    if (this.agent) return this.agent;
+
+    const config = { ...agentConfig, permissionMode: this.permissionMode };
+    this.agent = new AgentLoop(config, callbacks);
+    return this.agent;
+  }
+
+  async run(input: string): Promise<string> {
+    if (!this.agent) {
+      throw new Error("Agent not initialized");
+    }
+    return this.agent.run(input);
+  }
+
+  abort(): void {
+    this.agent?.control.abort();
+    this.onAbort?.();
+  }
+
+  destroy(): void {
+    this.agent?.control.destroy();
+  }
+
+  clearConversation(): void {
+    this.agent?.control.clearConversation();
+  }
+
+  async compactConversation(focus?: string): Promise<string> {
+    if (!this.agent) {
+      return "No active conversation.";
+    }
+    return this.agent.control.compactConversation(focus);
+  }
+
+  setPermissionMode(mode: PermissionMode): void {
+    this.agent?.control.setPermissionMode(mode);
+  }
+
+  get isAborted(): boolean {
+    return this.agent?.control.isAborted ?? false;
+  }
+
+  set onAbortCallback(cb: () => void) {
+    this.onAbort = cb;
+  }
+}

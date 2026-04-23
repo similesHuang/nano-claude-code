@@ -33,6 +33,13 @@ export class InputHandler {
   }
 
   /**
+   * 注册全局按键监听（用于 Escape 等特殊按键）
+   */
+  onKeypress(handler: (str: string | undefined, key: any) => void): void {
+    process.stdin.on("keypress", handler);
+  }
+
+  /**
    * 初始化终端 raw mode 和 keypress 事件
    */
   setupTerminal() {

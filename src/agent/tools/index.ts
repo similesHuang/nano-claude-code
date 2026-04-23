@@ -1,10 +1,10 @@
 import { runBash } from "./bash.js";
 import { runRead, runWrite, runEdit } from "./file.js";
-import type { TaskManager } from "../taskRuntime/taskManager.js";
-import type { SkillsSystem } from "../systems/skillsSystem.js";
-import type { MemorySystem } from "../extensions/memorySystem/memorySystem.js";
-import type { AsyncTask } from "../taskRuntime/asyncTask.js";
-import type { ToolOutput } from "../types.js";
+import type { TaskManager } from "../runtime/taskManager.js";
+import type { SkillsSystem } from "../extensions/skill/index.js";
+import type { MemorySystem } from "../extensions/memory/index.js";
+import type { AsyncTask } from "../runtime/asyncTask.js";
+import type { ToolOutput } from "../core/types.js";
 
 export { TOOLS } from "./schemas.js";
 

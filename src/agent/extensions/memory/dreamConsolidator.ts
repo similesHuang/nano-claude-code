@@ -1,7 +1,7 @@
 import { promises as fs, accessSync } from "fs";
 import * as path from "path";
 
-import { MemoryScope, MemorySentiment, MemorySystem, MemoryType } from "./memorySystem";
+import { MemoryScope, MemorySentiment, MemorySystem, MemoryType } from ".";
 
 // ================================================================
 // DreamConsolidator - 会话间记忆智能整理

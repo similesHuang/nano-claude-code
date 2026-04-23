@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { ThemeConfig, defaultTheme } from "./theme";
-import { HintList, type HintItem } from "./components/HintList";
+import { HintList, type HintItem } from "./components/HintList/index";
 
 /**
  * Renderer - 终端输出渲染器

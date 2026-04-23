@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { promises as fs } from "fs";
 import * as fsSync from "fs";
 import * as path from "path";
-import type { CompactConfig } from "../types";
+import type { CompactConfig } from "../../core/types";
 
 const DEFAULT_CONTEXT_LIMIT = 50000;
 const DEFAULT_KEEP_RECENT_TOOL_RESULTS = 3;

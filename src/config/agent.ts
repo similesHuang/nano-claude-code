@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true, quiet: true });
-import type { AgentConfig } from '../agent/types';
+import type { AgentConfig } from '../agent/core/types';
 
 function getEnvNumber(name: string, fallback: number): number {
   const raw = process.env[name];

@@ -1,8 +1,8 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 import * as os from "os";
-import type { MemorySystem } from "./memorySystem/memorySystem";
-import type { SkillsSystem } from "../systems/skillsSystem";
+import type { MemorySystem } from "../memory";
+import type { SkillsSystem } from "../skill";
 
 /**
  * SystemPromptBuilder - 系统提示词流水线构建器

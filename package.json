@@ -2,12 +2,12 @@
   "name": "nano-claude-code",
   "version": "1.0.0",
   "description": "coding agent",
-  "main": "dist/index.js",
+  "main": "dist/cli/index.js",
   "bin": {
     "nano-claude-code": "bin/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build"
   },

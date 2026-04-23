@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { ThemeConfig } from "../../theme";
+import { ThemeConfig } from "../../theme/index";
 
 export interface HintItem {
   name: string;
