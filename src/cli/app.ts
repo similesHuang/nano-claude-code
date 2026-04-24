@@ -1,9 +1,9 @@
 import type { PermissionMode } from "../agent/extensions/index.js";
 import { PERMISSION_MODES } from "../agent/extensions/index.js";
-import { Renderer } from "../ui/renderer.js";
-import { Spinner } from "../ui/spinner.js";
-import { InputHandler } from "../ui/input.js";
-import { CommandRegistry, registerBuiltinCommands } from "../ui/commands.js";
+import { Renderer } from "./ui/renderer.js";
+import { Spinner } from "./ui/spinner.js";
+import { InputHandler } from "./ui/input.js";
+import { CommandRegistry, registerBuiltinCommands } from "./ui/commands.js";
 import { AgentManager } from "./component/agentInstance.js";
 import { CallbacksFactory } from "./component/callbacks.js";
 import { Template } from "./component/template.js";

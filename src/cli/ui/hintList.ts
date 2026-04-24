@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { ThemeConfig } from "../../theme/index";
+import { ThemeConfig } from "./theme/index";
 
 // ── 类型定义 ────────────────────────────────────────
 

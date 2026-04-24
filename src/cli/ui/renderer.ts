@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { ThemeConfig, defaultTheme } from "./theme";
-import { HintList, type HintItem } from "./components/HintList/index";
+import { HintList, type HintItem } from "./hintList";
 
 // ── 常量定义 ────────────────────────────────────────
 
@@ -134,7 +134,11 @@ export class Renderer {
       
     }
   }
-
+  
+  userAnswer(answer: "y" | "n" | "always"): void {
+    const muted = this.color("primary");
+    process.stdout.write(`${muted(answer)}\n`);
+  }
   
   permissionDenied(toolName: string, reason: string): void {
     const error = this.color("error");
