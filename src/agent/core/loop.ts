@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AgentConfig, ToolExecutionResult, AgentCallbacks } from "./types.js";
+import type { AgentConfig, AgentOptions, ToolExecutionResult, AgentCallbacks } from "./types.js";
 import { TOOLS } from "../tools/index.js";
 import { AgentState } from "./state.js";
 import { ExtensionBuilder, Extensions } from "./extensionBuilder";
@@ -32,13 +32,17 @@ export class AgentLoop {
   // 子代理专用工具集（覆盖默认 TOOLS）
   private readonly customTools?: Anthropic.Tool[];
 
-  constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
-    this.model = config.model;
+  constructor(
+    config: AgentConfig,
+    callbacks: AgentCallbacks = {},
+    options: AgentOptions = {},
+  ) {
+    this.model = config.model || 'claude-sonnet-4.6';
     this.maxTokens = config.maxTokens || 8000;
     this.temperature = config.temperature ?? 0.7;
     this.maxIterations = config.maxIterations || 50;
     this.callbacks = callbacks;
-    this.customTools = config.tools;
+    this.customTools = options.tools;
 
     this.client = new Anthropic({
       apiKey: config.apiKey,
@@ -48,7 +52,7 @@ export class AgentLoop {
     this.state = new AgentState();
 
     const builder = new ExtensionBuilder();
-    this.extensions = builder.build(config, callbacks);
+    this.extensions = builder.build(config, callbacks, options);
 
     this.state.systemPrompt = this.extensions.promptBuilder.build();
 

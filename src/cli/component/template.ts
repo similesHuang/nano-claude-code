@@ -1,7 +1,7 @@
 import type { Renderer } from "../ui/renderer.js";
 import type { CommandRegistry } from "../ui/commands.js";
 import type { InputHandler } from "../ui/input.js";
-import type { AgentManager } from "./agentInstance.js";
+import type { AgentInstance } from "./agentInstance.js";
 import type { Spinner } from "../ui/spinner.js";
 
 const CTRL_C = "\x03";
@@ -16,7 +16,7 @@ export class Template {
     private renderer: Renderer,
     private commands: CommandRegistry,
     private input: InputHandler,
-    private agentManager: AgentManager,
+    private agentManager: AgentInstance,
     private spinner: Spinner
   ) {}
 

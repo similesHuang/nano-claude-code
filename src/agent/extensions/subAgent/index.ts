@@ -1,5 +1,5 @@
 import { AgentLoop } from "../../core/loop.js";
-import { AgentConfig } from "../../core/types.js";
+import type { AgentConfig, AgentOptions } from "../../core/types.js";
 import { TOOLS } from "../../tools/schemas.js";
 
 const MAX_SUB_AGENT_ITERATIONS = 30;
@@ -54,6 +54,9 @@ export class SubAgent {
       maxTokens: config.maxTokens || 8000,
       temperature: config.temperature ?? 0.7,
       maxIterations: config.maxIterations || MAX_SUB_AGENT_ITERATIONS,
+    };
+
+    const options: AgentOptions = {
       tools: buildSubAgentTools(),
     };
 
@@ -61,7 +64,7 @@ export class SubAgent {
       onError: (error) => {
         console.error(`[subAgent] Error: ${error.message}`);
       },
-    });
+    }, options);
   }
 
   /**

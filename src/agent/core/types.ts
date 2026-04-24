@@ -9,15 +9,21 @@ export interface CompactConfig {
 }
 
 /**
- * Agent 配置
+ * Agent 核心连接配置（LLM API 相关）
  */
 export interface AgentConfig {
-  model: string;
+  model?: string;
   apiKey?: string;
   baseUrl?: string;
   maxTokens?: number;
   temperature?: number;
   maxIterations?: number;
+}
+
+/**
+ * Agent 扩展选项（运行时行为配置）
+ */
+export interface AgentOptions {
   compact?: CompactConfig;
   permissionMode?: PermissionMode;
   tools?: Anthropic.Tool[];

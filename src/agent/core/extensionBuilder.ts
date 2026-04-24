@@ -1,12 +1,12 @@
 import * as path from "path";
 import { PATHS } from "../../config/paths.js";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig, AgentOptions } from "./types.js";
+import type { AgentCallbacks } from "./types.js";
 import { CompactSystem, PermissionManager, HookManager, MemorySystem, DreamConsolidator, SkillsSystem, ErrorRecovery, SystemPromptBuilder } from "../extensions/index.js";
 import { TaskManager } from "../runtime/taskManager.js";
 import { AsyncTask } from "../runtime/asyncTask.js";
 import { ToolRegistry } from "../tools/index.js";
 import { ToolPipeline } from "../toolPipeline.js";
-import type { AgentCallbacks } from "./types.js";
 
 /**
  * Extensions - Agent 的能力扩展容器
@@ -30,9 +30,13 @@ export interface Extensions {
  * ExtensionBuilder - Agent 能力扩展的创建封装
  */
 export class ExtensionBuilder {
-  build(config: AgentConfig, callbacks: AgentCallbacks): Extensions {
-    const compactSystem = new CompactSystem(PATHS.dataDir, config.compact);
-    const permissionManager = new PermissionManager(config.permissionMode ?? "default");
+  build(
+    config: AgentConfig,
+    callbacks: AgentCallbacks,
+    options: AgentOptions = {},
+  ): Extensions {
+    const compactSystem = new CompactSystem(PATHS.dataDir, options.compact);
+    const permissionManager = new PermissionManager(options.permissionMode ?? "default");
     const hookManager = new HookManager();
 
     const teamMemoryDir = PATHS.teamMemory(process.cwd());
@@ -46,7 +50,7 @@ export class ExtensionBuilder {
     const subAgentFactory = async (prompt: string) => {
       const { SubAgent } = await import("../extensions/subAgent/index.js");
       const subAgent = new SubAgent({
-        model: config.model,
+        model: config.model || 'claude-sonnet-4.6',
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         maxTokens: config.maxTokens,

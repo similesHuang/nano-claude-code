@@ -1,18 +1,25 @@
 import { AgentLoop } from "../../agent/index.js";
 import type { AgentCallbacks } from "../../agent/index.js";
 import type { PermissionMode } from "../../agent/extensions/index.js";
-import { agentConfig } from "../../config/index.js";
+import { getAgentConfig, getCompactConfig } from "../../config/agent.js";
 
 /**
- * AgentManager - Agent 生命周期管理
+ * Agent 生命周期管理
  */
-export class AgentManager {
+export class AgentInstance {
   private agent: AgentLoop | null = null;
 
-  createAgent(callbacks: AgentCallbacks, permissionMode: PermissionMode = "default"): AgentLoop {
+  createAgent(
+    callbacks: AgentCallbacks,
+    permissionMode: PermissionMode = "default",
+  ): AgentLoop {
     if (!this.agent) {
-      const config = { ...agentConfig, permissionMode };
-      this.agent = new AgentLoop(config, callbacks);
+      const config = getAgentConfig();
+      const compact = getCompactConfig();
+      this.agent = new AgentLoop(config, callbacks, {
+        permissionMode,
+        compact,
+      });
     }
     return this.agent;
   }
