@@ -1,7 +1,7 @@
-import { AgentLoop } from "../agent/index.js";
-import type { AgentCallbacks } from "../agent/index.js";
-import type { PermissionMode } from "../agent/extensions/index.js";
-import { agentConfig } from "../config/index.js";
+import { AgentLoop } from "../../agent/index.js";
+import type { AgentCallbacks } from "../../agent/index.js";
+import type { PermissionMode } from "../../agent/extensions/index.js";
+import { agentConfig } from "../../config/index.js";
 
 /**
  * AgentManager - Agent 生命周期管理

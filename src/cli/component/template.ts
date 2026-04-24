@@ -1,15 +1,15 @@
-import type { Renderer } from "./ui/renderer.js";
-import type { CommandRegistry } from "./ui/commands.js";
-import type { InputHandler } from "./ui/input.js";
-import type { AgentManager } from "./AgentManager.js";
-import type { Spinner } from "./ui/spinner.js";
+import type { Renderer } from "../../ui/renderer.js";
+import type { CommandRegistry } from "../../ui/commands.js";
+import type { InputHandler } from "../../ui/input.js";
+import type { AgentManager } from "./agentInstance.js";
+import type { Spinner } from "../../ui/spinner.js";
 
 const CTRL_C = "\x03";
 
 /**
  * Repl - 命令行交互循环
  */
-export class Repl {
+export class Template {
   private running = false;
 
   constructor(

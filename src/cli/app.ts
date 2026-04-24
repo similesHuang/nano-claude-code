@@ -1,24 +1,24 @@
 import type { PermissionMode } from "../agent/extensions/index.js";
 import { PERMISSION_MODES } from "../agent/extensions/index.js";
-import { Renderer } from "./ui/renderer.js";
-import { Spinner } from "./ui/spinner.js";
-import { InputHandler } from "./ui/input.js";
-import { CommandRegistry, registerBuiltinCommands } from "./ui/commands.js";
-import { AgentManager } from "./AgentManager.js";
-import { CallbacksFactory } from "./CallbacksFactory.js";
-import { Repl } from "./Repl.js";
+import { Renderer } from "../ui/renderer.js";
+import { Spinner } from "../ui/spinner.js";
+import { InputHandler } from "../ui/input.js";
+import { CommandRegistry, registerBuiltinCommands } from "../ui/commands.js";
+import { AgentManager } from "./component/agentInstance.js";
+import { CallbacksFactory } from "./component/callbacks.js";
+import { Template } from "./component/template.js";
 
 /**
  * CliApp - CLI 主应用协调者
  */
-export class CliApp {
+export class App {
   private readonly renderer = new Renderer();
   private readonly spinner: Spinner;
   private readonly commands = new CommandRegistry();
   private readonly input: InputHandler;
   private readonly agentManager = new AgentManager();
   private readonly callbacksFactory: CallbacksFactory;
-  private readonly repl: Repl;
+  private readonly template: Template;
 
   private permissionMode: PermissionMode = "default";
 
@@ -26,7 +26,7 @@ export class CliApp {
     this.spinner = new Spinner(this.renderer.getTheme());
     this.input = new InputHandler(this.renderer, this.commands);
     this.callbacksFactory = new CallbacksFactory(this.spinner, this.renderer, this.input);
-    this.repl = new Repl(this.renderer, this.commands, this.input, this.agentManager, this.spinner);
+    this.template = new Template(this.renderer, this.commands, this.input, this.agentManager, this.spinner);
 
     this.registerCommands();
   }
@@ -38,7 +38,7 @@ export class CliApp {
     this.agentManager.createAgent(this.callbacksFactory.create(), this.permissionMode);
     this.renderer.banner();
 
-    await this.repl.run();
+    await this.template.run();
   }
 
   // ── 命令注册 ────────────────────────────────────────

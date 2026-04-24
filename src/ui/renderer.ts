@@ -4,7 +4,7 @@ import { HintList, type HintItem } from "./components/HintList/index";
 
 // ── 常量定义 ────────────────────────────────────────
 
-const DIVIDER_LENGTH = 50;
+const DIVIDER_LENGTH = 100;
 const DIVIDER_CHAR = "┄";
 const INDENT = "  ";
 const TREE_BRANCH = "└";
@@ -85,19 +85,6 @@ export class Renderer {
     this.print("");
   }
 
-  // ── 状态栏 ─────────────────────────────────────────
-
-  statusBar(mode: string, model?: string): void {
-    const muted = this.color("muted");
-    const parts = [`mode: ${mode}`];
-
-    if (model) {
-      parts.push(`model: ${model}`);
-    }
-
-    this.printDivider();
-    this.print(`${INDENT}${muted(parts.join("  ·  "))}`);
-  }
 
   // ── Agent 回复（Markdown 渲染） ──────────────────────
 
@@ -137,15 +124,18 @@ export class Renderer {
     const warning = this.color("warning");
     const info = this.color("info");
     const muted = this.color("muted");
+    const primary = this.color("primary");
 
     this.print("");
-    this.print(`${INDENT}${warning(ICONS.warning)} 权限请求: ${info(toolName)}`);
+    process.stdout.write(`${INDENT}${warning(ICONS.warning)} 权限请求: ${info(toolName)} ${primary("?")} ${primary("Allow")} ${muted("(y/n/always)")}`);
 
     if (reason) {
-      this.print(`${INDENT}  ${muted(reason)}`);
+      process.stdout.write(`  ${muted(reason)} `);
+      
     }
   }
 
+  
   permissionDenied(toolName: string, reason: string): void {
     const error = this.color("error");
     const muted = this.color("muted");
@@ -156,15 +146,6 @@ export class Renderer {
     if (reason) {
       this.print(`${INDENT}  ${muted(reason)}`);
     }
-  }
-
-  permissionPrompt(): void {
-    const primary = this.color("primary");
-    const muted = this.color("muted");
-
-    process.stdout.write(
-      `\n${INDENT}${primary(ICONS.question)} ${primary("Allow")} ${muted("(y/n/always)")} `
-    );
   }
 
   // ── 反馈消息 ───────────────────────────────────────

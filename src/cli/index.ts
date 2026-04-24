@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import chalk from "chalk";
 import { Command } from "commander";
-import { CliApp } from "./CliApp.js";
+import { App } from "./app.js";
 
 const program = new Command();
 
@@ -10,7 +10,7 @@ program
   .description("A lightweight Claude AI coding agent")
   .version("1.0.0")
   .action(() => {
-    const cli = new CliApp();
+    const cli = new App();
     cli.start().catch((err) => {
       console.error(chalk.red("启动失败:"), err.message);
       process.exit(1);

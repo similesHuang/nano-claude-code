@@ -1,7 +1,7 @@
-import type { AgentCallbacks } from "../agent/core/types.js";
-import type { Spinner } from "./ui/spinner.js";
-import type { Renderer } from "./ui/renderer.js";
-import type { InputHandler } from "./ui/input.js";
+import type { AgentCallbacks } from "../../agent/core/types.js";
+import type { Spinner } from "../../ui/spinner.js";
+import type { Renderer } from "../../ui/renderer.js";
+import type { InputHandler } from "../../ui/input.js";
 
 /**
  * CallbacksFactory - AgentCallbacks 工厂
@@ -60,12 +60,11 @@ export class CallbacksFactory {
   ): Promise<"y" | "n" | "always"> {
     this.spinner.stop();
     this.renderer.permissionAsk(name, toolInput, reason);
-    this.renderer.permissionPrompt();
 
     const key = await this.input.waitForKey(["y", "n", "a"]);
     const answer = key === "a" ? "always" : key === "y" ? "y" : "n";
 
-    this.renderer.print(answer);
+    process.stdout.write(`  ${answer}\n`);
     this.spinner.start("执行中");
 
     return answer;
