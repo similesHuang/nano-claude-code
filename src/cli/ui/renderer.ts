@@ -1,4 +1,6 @@
 import chalk from "chalk";
+import { marked, type Renderer as MarkedRenderer } from "marked";
+import TerminalRenderer from "marked-terminal";
 import { ThemeConfig, defaultTheme } from "./theme";
 import { HintList, type HintItem } from "./hintList";
 
@@ -33,6 +35,17 @@ export class Renderer {
 
   constructor(theme: ThemeConfig = defaultTheme) {
     this.theme = theme;
+    this.configureMarked();
+  }
+
+  private configureMarked(): void {
+    marked.setOptions({
+      renderer: new TerminalRenderer({
+        colors: this.theme.colors,
+        reflow: true,
+        width: 80,
+      }) as unknown as MarkedRenderer,
+    });
   }
 
   getTheme(): ThemeConfig {
@@ -89,9 +102,8 @@ export class Renderer {
   // ── Agent 回复（Markdown 渲染） ──────────────────────
 
   response(text: string): void {
-    text.split("\n").forEach((line) => {
-      this.print(`${INDENT}${line}`);
-    });
+    const output = marked.parse(text) as string;
+     this.print(`${INDENT}${output}`);
   }
 
   // ── 工具执行 ───────────────────────────────────────

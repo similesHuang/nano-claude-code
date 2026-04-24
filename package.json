@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "dev": "tsc --watch",
+    "dev": "npm run build && tsx src/cli/index.ts",
     "prepublishOnly": "npm run build"
   },
   "repository": {
@@ -42,7 +42,8 @@
     "dotenv": "^17.3.1",
     "highlight.js": "^11.11.1",
     "inquirer": "^9.0.0",
-    "marked": "^18.0.2",
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
     "minimatch": "^10.2.5"
   },
   "engines": {
