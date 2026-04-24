@@ -103,7 +103,7 @@ export class Renderer {
 
   response(text: string): void {
     const output = marked.parse(text) as string;
-     this.print(`${INDENT}${output}`);
+     this.print(`\n${output}`);
   }
 
   // ── 工具执行 ───────────────────────────────────────
