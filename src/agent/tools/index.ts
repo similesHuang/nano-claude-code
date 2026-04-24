@@ -16,6 +16,8 @@ export interface ToolDeps {
   skillsSystem: SkillsSystem;
   memorySystem: MemorySystem;
   asyncTask: AsyncTask;
+  /** 子代理工厂: 接受 prompt 返回摘要 */
+  subAgentFactory?: (prompt: string) => Promise<string>;
 }
 
 /**
@@ -50,6 +52,14 @@ export class ToolRegistry {
         ),
       background_run: async (input) => this.ok(deps.asyncTask.run(input.command)),
       check_background: async (input) => this.ok(deps.asyncTask.check(input.task_id)),
+      subagent: async (input) => {
+        if (!deps.subAgentFactory) {
+          return this.err("SubAgent not configured");
+        }
+        const desc = input.description || "subtask";
+        const output = await deps.subAgentFactory(input.prompt);
+        return this.ok(`[task:${desc}]\n${output.slice(0, 10000)}`);
+      },
     };
   }
 

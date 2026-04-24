@@ -29,12 +29,16 @@ export class AgentLoop {
   // 标记首次运行初始化
   private skillsInitialized = false;
 
+  // 子代理专用工具集（覆盖默认 TOOLS）
+  private readonly customTools?: Anthropic.Tool[];
+
   constructor(config: AgentConfig, callbacks: AgentCallbacks = {}) {
     this.model = config.model;
     this.maxTokens = config.maxTokens || 8000;
     this.temperature = config.temperature ?? 0.7;
     this.maxIterations = config.maxIterations || 50;
     this.callbacks = callbacks;
+    this.customTools = config.tools;
 
     this.client = new Anthropic({
       apiKey: config.apiKey,
@@ -84,6 +88,24 @@ export class AgentLoop {
     }
   }
 
+  /**
+   * subAgent 入口 — 跳过初始化（技能、记忆、hook），直接运行
+   * 独立的 system prompt + 过滤后的工具集
+   */
+  async subAgentRun(prompt: string, system: string): Promise<string> {
+    this.state.aborted = false;
+    this.state.systemPrompt = system;
+    this.state.messages.push({ role: "user", content: prompt });
+
+    try {
+      await this.agentLoop();
+      return this.extractFinalResponse();
+    } catch (error) {
+      this.callbacks.onError?.(error as Error);
+      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
   // ── 核心循环 ─────────────────────────────────────────
 
   private async agentLoop(): Promise<void> {
@@ -122,7 +144,7 @@ export class AgentLoop {
           model: this.model,
           system: this.state.systemPrompt,
           messages: this.state.messages,
-          tools: [...TOOLS],
+          tools: this.customTools ?? [...TOOLS],
           max_tokens: this.maxTokens,
           temperature: this.temperature,
         });

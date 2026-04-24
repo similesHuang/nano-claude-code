@@ -227,4 +227,22 @@ export const TOOLS: Anthropic.Tool[] = [
       required: ["name", "description", "type", "content"],
     },
   },
+  {
+    name: "subagent",
+    description: "Spawn a subagent with fresh context. It shares the filesystem but not conversation history.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "Detailed task description for the subagent",
+        },
+        description: {
+          type: "string",
+          description: "Short label for this subtask (shown in UI)",
+        },
+      },
+      required: ["prompt"],
+    },
+  },
 ];

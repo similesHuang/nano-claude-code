@@ -20,6 +20,7 @@ export interface AgentConfig {
   maxIterations?: number;
   compact?: CompactConfig;
   permissionMode?: PermissionMode;
+  tools?: Anthropic.Tool[];
 }
 
 /**

@@ -43,11 +43,25 @@ export class ExtensionBuilder {
     const skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
     const asyncTask = new AsyncTask(process.cwd(), PATHS.backendTaskDir);
 
+    const subAgentFactory = async (prompt: string) => {
+      const { SubAgent } = await import("../extensions/subAgent/index.js");
+      const subAgent = new SubAgent({
+        model: config.model,
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+        workdir: process.cwd(),
+      });
+      return subAgent.execute(prompt);
+    };
+
     const toolRegistry = new ToolRegistry({
       taskManager,
       skillsSystem,
       memorySystem,
       asyncTask,
+      subAgentFactory,
     });
 
     const toolPipeline = new ToolPipeline(
