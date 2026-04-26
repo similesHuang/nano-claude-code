@@ -55,7 +55,10 @@ export class Renderer {
   /** 获取主题颜色对应的 chalk 函数 */
   private color(name: ColorName): ChalkFunction {
     const colorName = this.theme.colors[name];
-    return (chalk as unknown as Record<string, ChalkFunction>)[colorName] ?? chalk.white;
+    return (
+      (chalk as unknown as Record<string, ChalkFunction>)[colorName] ??
+      chalk.white
+    );
   }
 
   /** 公共方法：获取主题颜色 */
@@ -70,7 +73,9 @@ export class Renderer {
   }
 
   private printDivider(): void {
-    this.print(`${INDENT}${this.color("muted")(DIVIDER_CHAR.repeat(DIVIDER_LENGTH))}`);
+    this.print(
+      `${INDENT}${this.color("muted")(DIVIDER_CHAR.repeat(DIVIDER_LENGTH))}`,
+    );
   }
 
   // ── Banner ─────────────────────────────────────────
@@ -80,31 +85,23 @@ export class Renderer {
     const muted = this.color("muted");
 
     const asciiArt = [
-      "/*",
-      " *      _______        _______",
-      " *     | ~   ~ |  ~'  | _   _ |  ~.  ",
-      " *   ,~| <> <> |~`  ,~|<a   a>|~'",
-      " *  `~  |   ^   |  `~  |   L `,|",
-      " *     | \\---/ |      | /---\\ |",
-      " *      \\ \"\"\" /        \\'~~~'/",
-      " *       `---'          `---'",
-      " */",
+      "                                           _                    _                               _       ",
+      "  _ __    __ _  _ __    ___           ___ | |  __ _  _   _   __| |  ___          ___  ___    __| |  ___ ",
+      " | '_ \\  / _` || '_ \\  / _ \\  _____  / __|| | / _` || | | | / _` | / _ \\ _____  / __|/ _ \\  / _` | / _ \\",
+      " | | | || (_| || | | || (_) ||_____|| (__ | || (_| || |_| || (_| ||  __/|_____|| (__| (_) || (_| ||  __/",
+      " |_| |_| \\__,_||_| |_| \\___/         \\___||_| \\__,_| \\__,_| \\__,_| \\___|        \\___|\\___/  \\__,_| \\___|",
     ];
-
-    this.print("");
     asciiArt.forEach((line) => this.print(primary(line)));
     this.print("");
     this.print(muted(" /help 获取命令提示"));
-    this.print("");
   }
-
 
   // ── Agent 回复（Markdown 渲染） ──────────────────────
 
   response(text: string): void {
     const output = marked.parse(text) as string;
-    this.print('\n');
-     this.print(`${INDENT}${output}`);
+    this.print("\n");
+    this.print(`${INDENT}${output}`);
   }
 
   // ── 工具执行 ───────────────────────────────────────
@@ -114,7 +111,9 @@ export class Renderer {
     const muted = this.color("muted");
 
     this.printDivider();
-    this.print(`${INDENT}${info(ARROW)} ${info(toolName)} ${muted("·")} ${summary}`);
+    this.print(
+      `${INDENT}${info(ARROW)} ${info(toolName)} ${muted("·")} ${summary}`,
+    );
   }
 
   toolResult(_toolName: string, output: string, isError: boolean): void {
@@ -140,19 +139,20 @@ export class Renderer {
     const primary = this.color("primary");
 
     this.print("");
-    process.stdout.write(`${INDENT}${warning(ICONS.warning)} 权限请求: ${info(toolName)} ${primary("?")} ${primary("Allow")} ${muted("(y/n/always)")}`);
+    process.stdout.write(
+      `${INDENT}${warning(ICONS.warning)} 权限请求: ${info(toolName)} ${primary("?")} ${primary("Allow")} ${muted("(y/n/always)")}`,
+    );
 
     if (reason) {
       process.stdout.write(`  ${muted(reason)} `);
-      
     }
   }
-  
+
   userAnswer(answer: "y" | "n" | "always"): void {
     const muted = this.color("primary");
     process.stdout.write(`${muted(answer)}\n`);
   }
-  
+
   permissionDenied(toolName: string, reason: string): void {
     const error = this.color("error");
     const muted = this.color("muted");
@@ -244,7 +244,9 @@ export class Renderer {
         return "listing tasks";
 
       case "task_create":
-        return typeof toolInput.subject === "string" ? toolInput.subject : "new task";
+        return typeof toolInput.subject === "string"
+          ? toolInput.subject
+          : "new task";
 
       case "task_update": {
         const parts = [`#${toolInput.task_id}`];
@@ -299,10 +301,12 @@ export class Renderer {
     matches: Array<{ name: string; description: string }>,
     selectedIndex: number,
     inputLine: string,
-    prompt: string
+    prompt: string,
   ): void {
     // 清除当前行并重绘输入
-    process.stdout.write(`\r\x1b[2K${prompt}${this.color("neutral")(inputLine)}`);
+    process.stdout.write(
+      `\r\x1b[2K${prompt}${this.color("neutral")(inputLine)}`,
+    );
 
     if (matches.length === 0) {
       return;
@@ -323,7 +327,8 @@ export class Renderer {
 
     // 光标回到输入位置
     process.stdout.write(`\x1b[${matches.length}A`);
-    const cursorColumn = this.stripAnsiCodes(prompt).length + inputLine.length + 1;
+    const cursorColumn =
+      this.stripAnsiCodes(prompt).length + inputLine.length + 1;
     process.stdout.write(`\r\x1b[${cursorColumn}C`);
   }
 

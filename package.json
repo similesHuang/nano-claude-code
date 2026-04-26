@@ -7,7 +7,7 @@
     "nano-claude-code": "bin/cli.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "rimraf dist && tsc",
     "dev": "npm run build && tsx src/cli/index.ts",
     "prepublishOnly": "npm run build"
   },
@@ -31,13 +31,14 @@
     "@types/inquirer": "^9.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.19.37",
+    "rimraf": "^5.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.81.0",
     "async-lock": "^1.4.1",
-    "chalk": "^5.0.0",
+    "chalk": "^4.1.2",
     "commander": "^12.0.0",
     "dotenv": "^17.3.1",
     "highlight.js": "^11.11.1",
