@@ -33,9 +33,9 @@ export class Template {
 
       if (!text) continue;
 
-      if (this.commands.tryExecute(text)) continue;
+      if (await this.commands.tryExecute(text)) continue;
 
-      if (this.handleLegacyCommand(text)) continue;
+      if (await this.handleLegacyCommand(text)) continue;
 
       await this.runAgent(text);
     }
@@ -66,7 +66,7 @@ export class Template {
 
   // ── 命令处理 ────────────────────────────────────────
 
-  private handleLegacyCommand(text: string): boolean {
+  private async handleLegacyCommand(text: string): Promise<boolean> {
     if (text === "exit" || text === "quit") {
       this.exit();
       return true;
@@ -79,7 +79,7 @@ export class Template {
 
     const slashCommand = commandMap[text];
     if (slashCommand) {
-      this.commands.tryExecute(slashCommand);
+      await this.commands.tryExecute(slashCommand);
       return true;
     }
 

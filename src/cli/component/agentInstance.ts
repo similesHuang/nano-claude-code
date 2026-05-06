@@ -10,10 +10,10 @@ import { getAgentConfig, getCompactConfig } from "../../config/agent.js";
 export class AgentInstance {
   private agent: AgentLoop | null = null;
 
-  createAgent(
+  async createAgent(
     callbacks: AgentCallbacks,
     permissionMode: PermissionMode = "default",
-  ): AgentLoop {
+  ): Promise<AgentLoop> {
     if (!this.agent) {
       const config = getAgentConfig();
       const compact = getCompactConfig();
@@ -21,6 +21,7 @@ export class AgentInstance {
         permissionMode,
         compact,
       });
+      await this.agent.initialize();
     }
     return this.agent;
   }

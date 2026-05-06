@@ -48,7 +48,7 @@ export class App {
     const ok = await this.ensureConfig();
     if (!ok) return;
 
-    this.agentInstance.createAgent(
+    await this.agentInstance.createAgent(
       this.callbacksFactory.create(),
       this.permissionMode,
     );

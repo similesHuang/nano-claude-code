@@ -3,7 +3,7 @@ import type { Renderer } from "./renderer";
 export interface SlashCommand {
   name: string;
   description: string;
-  handler: (args: string) => boolean | void;
+  handler: (args: string) => boolean | void | Promise<boolean | void>;
 }
 
 /**
@@ -21,7 +21,7 @@ export class CommandRegistry {
     this.commands.push(cmd);
   }
 
-  tryExecute(input: string): boolean {
+  async tryExecute(input: string): Promise<boolean> {
     if (!input.startsWith("/")) return false;
 
     const spaceIdx = input.indexOf(" ");
@@ -31,7 +31,7 @@ export class CommandRegistry {
     const cmd = this.commands.find((c) => c.name === name);
     if (!cmd) return false;
 
-    cmd.handler(args);
+    await cmd.handler(args);
     return true;
   }
 

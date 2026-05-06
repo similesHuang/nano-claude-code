@@ -67,12 +67,33 @@ export class AgentLoop {
     return this._control;
   }
 
+  // ── 初始化 ───────────────────────────────────────────
+
+  async initialize(): Promise<void> {
+    if (this.skillsInitialized) return;
+    this.skillsInitialized = true;
+
+    await this.extensions.hookManager.init();
+    await this.extensions.hookManager.runHooks("SessionStart", { tool_name: "", tool_input: {} });
+    await this.extensions.memorySystem.init();
+    await this.extensions.dreamConsolidator.incrementSession();
+    this.tryDreamConsolidate();
+    await this.extensions.skillsSystem.init();
+    this.extensions.promptBuilder.markSkillsReady();
+
+    // 恢复上次 session 的历史消息，或创建新 session
+    const { messages } = await this.extensions.sessionStore.resumeOrCreate();
+    if (messages.length > 0) {
+      this.state.messages = messages;
+    }
+  }
+
   // ── 运行入口 ─────────────────────────────────────────
 
   async run(userMessage: string): Promise<string> {
     this.state.aborted = false;
 
-    await this.initializeIfNeeded(userMessage);
+    this.handleMemorySuppressionPattern(userMessage);
 
     this.state.systemPrompt = this.extensions.promptBuilder.build();
 
@@ -293,29 +314,6 @@ export class AgentLoop {
         }
       })
       .catch(() => {});
-  }
-
-  // ── 初始化 ───────────────────────────────────────────
-
-  private async initializeIfNeeded(userMessage: string): Promise<void> {
-    if (this.skillsInitialized) return;
-    this.skillsInitialized = true;
-
-    await this.extensions.hookManager.init();
-    await this.extensions.hookManager.runHooks("SessionStart", { tool_name: "", tool_input: {} });
-    await this.extensions.memorySystem.init();
-    await this.extensions.dreamConsolidator.incrementSession();
-    this.tryDreamConsolidate();
-    await this.extensions.skillsSystem.init();
-    this.extensions.promptBuilder.markSkillsReady();
-
-    // 恢复上次 session 的历史消息，或创建新 session
-    const { messages } = await this.extensions.sessionStore.resumeOrCreate();
-    if (messages.length > 0) {
-      this.state.messages = messages;
-    }
-
-    this.handleMemorySuppressionPattern(userMessage);
   }
 
   private handleMemorySuppressionPattern(userMessage: string): void {
