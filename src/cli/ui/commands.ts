@@ -53,6 +53,10 @@ export function registerBuiltinCommands(
     onExit: () => void;
     onClear: () => void;
     onCompact: (focus?: string) => Promise<void>;
+    onSessionNew?: (label?: string) => Promise<void>;
+    onSessionList?: () => void;
+    onSessionSwitch?: (id: string) => Promise<void>;
+    onSessionResume?: () => Promise<void>;
   }
 ): void {
   const commands: SlashCommand[] = [
@@ -114,6 +118,42 @@ export function registerBuiltinCommands(
           renderer.info(`用法: /mode <${modes.join("|")}>`);
           renderer.info(`当前: ${context.getPermissionMode()}`);
         }
+        return true;
+      },
+    },
+    {
+      name: "/session-new",
+      description: "创建新会话 (可选: /session-new <label>)",
+      handler: (args) => {
+        context.onSessionNew?.(args || undefined);
+        return true;
+      },
+    },
+    {
+      name: "/sessions",
+      description: "列出所有会话",
+      handler: () => {
+        context.onSessionList?.();
+        return true;
+      },
+    },
+    {
+      name: "/session-switch",
+      description: "切换到指定会话 (/session-switch <id>)",
+      handler: (args) => {
+        if (!args) {
+          renderer.info("用法: /session-switch <session_id>");
+          return true;
+        }
+        context.onSessionSwitch?.(args);
+        return true;
+      },
+    },
+    {
+      name: "/session-resume",
+      description: "恢复最近的会话",
+      handler: () => {
+        context.onSessionResume?.();
         return true;
       },
     },

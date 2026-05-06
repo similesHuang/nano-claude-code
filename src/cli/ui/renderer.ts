@@ -325,8 +325,8 @@ export class Renderer {
       process.stdout.write(`\n\x1b[2K${line}`);
     });
 
-    // 光标回到输入位置
-    process.stdout.write(`\x1b[${matches.length}A`);
+    // 光标回到输入位置（用实际渲染行数，而非 matches 总数）
+    process.stdout.write(`\x1b[${lines.length}A`);
     const cursorColumn =
       this.stripAnsiCodes(prompt).length + inputLine.length + 1;
     process.stdout.write(`\r\x1b[${cursorColumn}C`);

@@ -8,3 +8,4 @@ export { MemorySystem, MEMORY_TYPES, MEMORY_SCOPES, MEMORY_SENTIMENTS, type Memo
 export { DreamConsolidator } from "./memory/dreamConsolidator";
 export { ErrorRecovery, chooseRecovery, type RecoveryKind, type RecoveryDecision, type ErrorRecoveryConfig } from "./retry";
 export { SystemPromptBuilder } from "./promptBuilder";
+export { SessionStore, type SessionMeta } from "./sessions";

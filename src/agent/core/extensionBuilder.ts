@@ -2,7 +2,7 @@ import * as path from "path";
 import { PATHS } from "../../config/paths.js";
 import type { AgentConfig, AgentOptions } from "./types.js";
 import type { AgentCallbacks } from "./types.js";
-import { CompactSystem, PermissionManager, HookManager, MemorySystem, DreamConsolidator, SkillsSystem, ErrorRecovery, SystemPromptBuilder } from "../extensions/index.js";
+import { CompactSystem, PermissionManager, HookManager, MemorySystem, DreamConsolidator, SkillsSystem, ErrorRecovery, SystemPromptBuilder, SessionStore } from "../extensions/index.js";
 import { TaskManager } from "../runtime/taskManager.js";
 import { AsyncTask } from "../runtime/asyncTask.js";
 import { ToolRegistry } from "../tools/index.js";
@@ -24,6 +24,7 @@ export interface Extensions {
   skillsSystem: SkillsSystem;
   toolRegistry: ToolRegistry;
   toolPipeline: ToolPipeline;
+  sessionStore: SessionStore;
 }
 
 /**
@@ -46,6 +47,7 @@ export class ExtensionBuilder {
     const taskManager = new TaskManager(path.join(PATHS.taskDir));
     const skillsSystem = new SkillsSystem(PATHS.globalSkills, PATHS.projectSkills(process.cwd()));
     const asyncTask = new AsyncTask(process.cwd(), PATHS.backendTaskDir);
+    const sessionStore = new SessionStore("default", PATHS.sessionsDir);
 
     const subAgentFactory = async (prompt: string) => {
       const { SubAgent } = await import("../extensions/subAgent/index.js");
@@ -95,6 +97,7 @@ export class ExtensionBuilder {
       skillsSystem,
       toolRegistry,
       toolPipeline,
+      sessionStore,
     };
   }
 }

@@ -64,9 +64,19 @@ export class HintList {
   }
 
   render(): string[] {
-    const visibleItems = this.items.slice(0, this.options.maxItems);
+    const max = this.options.maxItems;
+    const total = this.items.length;
+    const selected = this.options.selectedIndex;
+
+    // 计算滚动窗口起始位置
+    let start = 0;
+    if (total > max) {
+      start = Math.max(0, Math.min(selected - Math.floor(max / 2), total - max));
+    }
+
+    const visibleItems = this.items.slice(start, start + max);
     return visibleItems.map((item, index) =>
-      this.formatItem(item, index === this.options.selectedIndex)
+      this.formatItem(item, (start + index) === selected)
     );
   }
 }

@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { PermissionMode } from "../extensions/permission/index.js";
+import type { SessionMeta } from "../extensions/sessions/index.js";
 import type { AgentState } from "./state.js";
 import type { Extensions } from "./extensionBuilder.js";
 
@@ -71,6 +72,48 @@ export class AgentControl {
 
   setPermissionMode(mode: PermissionMode): void {
     this.config.extensions.permissionManager.mode = mode;
+  }
+
+  // ── 会话持久化 ──────────────────────────────────────
+
+  async createSession(label?: string): Promise<string> {
+    const { state, extensions } = this.config;
+    state.messages = [];
+    const sessionId = await extensions.sessionStore.createSession(label);
+    return sessionId;
+  }
+
+  async switchSession(sessionIdPrefix: string): Promise<{ sessionId: string; messageCount: number }> {
+    const { state, extensions } = this.config;
+    const sessions = extensions.sessionStore.listSessions();
+    const matched = sessions.filter(([id]) => id.startsWith(sessionIdPrefix));
+
+    if (matched.length === 0) {
+      throw new Error(`Session not found: ${sessionIdPrefix}`);
+    }
+    if (matched.length > 1) {
+      throw new Error(`Ambiguous prefix, matches: ${matched.map(([id]) => id).join(", ")}`);
+    }
+
+    const [sessionId] = matched[0];
+    const messages = await extensions.sessionStore.loadSession(sessionId);
+    state.messages = messages;
+    return { sessionId, messageCount: messages.length };
+  }
+
+  async resumeSession(): Promise<{ sessionId: string; messageCount: number }> {
+    const { state, extensions } = this.config;
+    const { sessionId, messages } = await extensions.sessionStore.resumeOrCreate();
+    state.messages = messages;
+    return { sessionId, messageCount: messages.length };
+  }
+
+  listSessions(): [string, SessionMeta][] {
+    return this.config.extensions.sessionStore.listSessions();
+  }
+
+  get currentSessionId(): string | null {
+    return this.config.extensions.sessionStore.currentSessionId;
   }
 
   // ── 资源清理 ────────────────────────────────────────

@@ -282,13 +282,14 @@ export class InputHandler {
 
   private renderWithHints(): void {
     if (this.hintMatches.length > 0) {
+      const visibleCount = Math.min(this.hintMatches.length, 6);
       this.renderer.commandHints(
         this.hintMatches,
         this.hintIndex,
         this.editor.getValue(),
         this.prompt
       );
-      this.prevHintCount = this.hintMatches.length;
+      this.prevHintCount = visibleCount;
     } else {
       this.clearHints();
       this.renderLine();

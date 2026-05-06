@@ -87,6 +87,45 @@ export class App {
           );
         }
       },
+      onSessionNew: async (label?: string) => {
+        try {
+          const sid = await this.agentInstance.createSession(label);
+          this.renderer.success(`新会话已创建: ${sid}${label ? ` (${label})` : ""}`);
+        } catch (err) {
+          this.renderer.error(`创建会话失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
+      onSessionList: () => {
+        const sessions = this.agentInstance.listSessions();
+        if (sessions.length === 0) {
+          this.renderer.info("  暂无会话");
+          return;
+        }
+        const currentId = this.agentInstance.currentSessionId;
+        this.renderer.info("  会话列表:");
+        for (const [sid, meta] of sessions) {
+          const active = sid === currentId ? " <-- 当前" : "";
+          const label = meta.label ? ` (${meta.label})` : "";
+          const last = meta.last_active?.slice(0, 19) ?? "?";
+          this.renderer.info(`    ${sid}${label}  消息=${meta.message_count}  最后活跃=${last}${active}`);
+        }
+      },
+      onSessionSwitch: async (id: string) => {
+        try {
+          const { sessionId, messageCount } = await this.agentInstance.switchSession(id);
+          this.renderer.success(`已切换到会话: ${sessionId} (${messageCount} 条消息)`);
+        } catch (err) {
+          this.renderer.error(`切换会话失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
+      onSessionResume: async () => {
+        try {
+          const { sessionId, messageCount } = await this.agentInstance.resumeSession();
+          this.renderer.success(`已恢复会话: ${sessionId} (${messageCount} 条消息)`);
+        } catch (err) {
+          this.renderer.error(`恢复会话失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
     });
   }
 

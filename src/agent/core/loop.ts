@@ -54,8 +54,6 @@ export class AgentLoop {
     const builder = new ExtensionBuilder();
     this.extensions = builder.build(config, callbacks, options);
 
-    this.state.systemPrompt = this.extensions.promptBuilder.build();
-
     this._control = new AgentControl({
       state: this.state,
       extensions: this.extensions,
@@ -82,6 +80,9 @@ export class AgentLoop {
       role: "user",
       content: userMessage,
     });
+
+    // 持久化用户消息到 session
+    this.extensions.sessionStore.saveTurn("user", userMessage).catch(() => {});
 
     try {
       await this.agentLoop();
@@ -128,6 +129,9 @@ export class AgentLoop {
       }
 
       this.state.messages.push({ role: "assistant", content: response.content });
+
+      // 持久化助手消息到 session
+      this.saveAssistantTurn(response.content);
 
       if (response.stop_reason !== "tool_use") {
         break;
@@ -193,6 +197,18 @@ export class AgentLoop {
         await this.extensions.toolPipeline.executeAll(content);
 
       this.state.messages.push({ role: "user", content: results });
+
+      // 持久化工具结果到 session
+      for (const r of results) {
+        const toolBlock = content.find(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.id === r.tool_use_id,
+        );
+        if (toolBlock) {
+          this.extensions.sessionStore
+            .saveToolResult(r.tool_use_id, toolBlock.name, toolBlock.input, r.content)
+            .catch(() => {});
+        }
+      }
 
       if (manualCompact) {
         this.state.messages = await this.extensions.compactSystem.compactHistory(
@@ -293,6 +309,12 @@ export class AgentLoop {
     await this.extensions.skillsSystem.init();
     this.extensions.promptBuilder.markSkillsReady();
 
+    // 恢复上次 session 的历史消息，或创建新 session
+    const { messages } = await this.extensions.sessionStore.resumeOrCreate();
+    if (messages.length > 0) {
+      this.state.messages = messages;
+    }
+
     this.handleMemorySuppressionPattern(userMessage);
   }
 
@@ -330,5 +352,20 @@ export class AgentLoop {
     }
 
     return "";
+  }
+
+  // ── Session 持久化 ────────────────────────────────────
+
+  private saveAssistantTurn(content: Anthropic.ContentBlock[]): void {
+    const serialized = content.map((block) => {
+      if (block.type === "text") {
+        return { type: "text", text: block.text };
+      }
+      if (block.type === "tool_use") {
+        return { type: "tool_use", id: block.id, name: block.name, input: block.input };
+      }
+      return block;
+    });
+    this.extensions.sessionStore.saveTurn("assistant", serialized).catch(() => {});
   }
 }
