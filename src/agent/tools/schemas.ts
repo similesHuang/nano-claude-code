@@ -245,4 +245,51 @@ export const TOOLS: Anthropic.Tool[] = [
       required: ["prompt"],
     },
   },
+  {
+    name: "web_scan",
+    description: "Get simplified HTML and tab list. Removes hidden/floating/covered elements. Call after switching pages",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        tabs_only: {
+          type: "boolean",
+          description: "Show tab list only, no HTML",
+        },
+        switch_tab_id: {
+          type: "string",
+          description: "[Optional] Tab ID to switch to",
+        },
+        text_only: {
+          type: "boolean",
+          description: "Plain text only, no HTML",
+        },
+      },
+    },
+  },
+  {
+    name: "web_execute_js",
+    description: "Execute JS. Multi-call OK with different switch_tab_id. No guessing. Act accurately to reduce web_scan calls.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        script: {
+          type: "string",
+          description: "JS code to execute.",
+        },
+        no_monitor: {
+          type: "boolean",
+          description: "Skip page change monitoring, saves 2-3s. Only for reads, not for page actions",
+        },
+        save_to_file: {
+          type: "string",
+          description: "File path to save the full js_return result. Use only for long results.",
+        },
+        switch_tab_id: {
+          type: "string",
+          description: "[Optional] Tab ID to switch to before executing",
+        },
+      },
+      required: ["script"],
+    },
+  },
 ];

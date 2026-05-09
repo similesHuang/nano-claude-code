@@ -91,6 +91,8 @@ export class App {
         try {
           const sid = await this.agentInstance.createSession(label);
           this.renderer.success(`新会话已创建: ${sid}${label ? ` (${label})` : ""}`);
+          // 自动切换到新会话
+        
         } catch (err) {
           this.renderer.error(`创建会话失败: ${err instanceof Error ? err.message : String(err)}`);
         }

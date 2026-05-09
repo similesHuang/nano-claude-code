@@ -1,5 +1,6 @@
 import { runBash } from "./bash.js";
 import { runRead, runWrite, runEdit } from "./file.js";
+import { webScan, webExecuteJs } from "./browser.js";
 import type { TaskManager } from "../runtime/taskManager.js";
 import type { SkillsSystem } from "../extensions/skill/index.js";
 import type { MemorySystem } from "../extensions/memory/index.js";
@@ -59,6 +60,21 @@ export class ToolRegistry {
         const desc = input.description || "subtask";
         const output = await deps.subAgentFactory(input.prompt);
         return this.ok(`[task:${desc}]\n${output.slice(0, 10000)}`);
+      },
+      web_scan: async (input) => {
+        return this.ok(await webScan({
+          tabsOnly: input.tabs_only,
+          switchTabId: input.switch_tab_id,
+          textOnly: input.text_only,
+        }));
+      },
+      web_execute_js: async (input) => {
+        const output = await webExecuteJs(input.script, {
+          switchTabId: input.switch_tab_id,
+          noMonitor: input.no_monitor,
+          saveToFile: input.save_to_file,
+        });
+        return this.ok(output);
       },
     };
   }
